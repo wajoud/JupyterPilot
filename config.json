@@ -1,0 +1,13 @@
+{
+    "mode": "local",
+    "local": {
+        "url": "http://localhost:11434/api/generate",
+        "model": "qwen2.5-coder:7b"
+    },
+    "cloud": {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "api_key": "your_key_here"
+    },
+    "context_cells": 3
+}

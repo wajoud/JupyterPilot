@@ -1,0 +1,15 @@
+{
+    "_comment_network": "Replace [HUB_IP] with the private IP of your JupyterHub server.",
+    "hub_ip": "[HUB_IP]",
+    "proxy_api_url": "http://[HUB_IP]:5432",
+    "hub_api_url": "http://[HUB_IP]:8081/hub/api",
+    "hub_bind_url": "http://[HUB_IP]:8081",
+    "hub_port": 8000,
+
+    "_comment_auth": "Set your team domain and admin usernames here.",
+    "hosted_domain": "your-team-domain.com",
+    "admin_users": ["admin_username"],
+
+    "_comment_mapping": "Path to the JSON file that maps users/groups to remote servers.",
+    "mapping_file": "user_mapping.json"
+}
