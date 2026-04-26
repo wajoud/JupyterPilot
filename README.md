@@ -53,20 +53,44 @@ The agentic interface that lives inside your notebook.
 
 ---
 
-## 🚀 Quick Start
+## 📦 Installation Guide
 
-### 1. Global Setup (Admin)
-Configure the Hub in [hub_settings.json](file:///Users/wajoud/projects/Github/JupyterPilot/hub_settings.json):
-```json
-{
-    "hub_ip": "[HUB_IP]",
-    "hosted_domain": "your-team.com",
-    "mapping_file": "user_mapping.json"
-}
+The JupyterPilot extension works on any system running IPython/Jupyter (Mac, Linux, Windows).
+
+### 1. Prerequisites
+- **Python 3.8+**
+- **Requests**: `pip install requests`
+- **LiteLLM** (Optional, for cloud mode): `pip install litellm`
+- **Ollama** (For local mode): [Download here](https://ollama.com/)
+
+### 2. Deployment by Operating System
+
+#### 🍎 macOS (Homebrew or Standard)
+```bash
+# Create startup directory
+mkdir -p ~/.ipython/profile_default/startup/
+# Install extension
+cp jupyterpilot_extension.py ~/.ipython/profile_default/startup/
+# Create user config
+mkdir -p ~/.jupyterpilot
 ```
 
-### 2. User Setup (Individual)
-Configure your LLM preference in `~/.jupyterpilot/config.json`:
+#### 🐧 Linux (Ubuntu/Debian/CentOS)
+```bash
+# Create startup directory
+mkdir -p ~/.ipython/profile_default/startup/
+# Install extension
+cp jupyterpilot_extension.py ~/.ipython/profile_default/startup/
+```
+
+#### 🪟 Windows (PowerShell)
+```powershell
+New-Item -ItemType Directory -Force -Path "$HOME\.ipython\profile_default\startup"
+Copy-Item "jupyterpilot_extension.py" -Destination "$HOME\.ipython\profile_default\startup\"
+```
+
+### 3. Configuration
+Create a config file at `~/.jupyterpilot/config.json`:
 ```json
 {
     "mode": "local",
@@ -74,12 +98,6 @@ Configure your LLM preference in `~/.jupyterpilot/config.json`:
         "model": "qwen2.5-coder:7b"
     }
 }
-```
-
-### 3. Enable Magics
-Install the extension in your IPython startup folder:
-```bash
-cp jupyterpilot_extension.py ~/.ipython/profile_default/startup/
 ```
 
 ---
@@ -93,10 +111,50 @@ cp jupyterpilot_extension.py ~/.ipython/profile_default/startup/
 
 ---
 
+## ✨ Standalone Magic (Extension Only)
+
+If you only want the AI code generation and error fixing features without the full JupyterHub infrastructure, follow these two steps:
+
+### 1. Install the Extension
+Copy the extension file to your local IPython startup folder:
+```bash
+cp jupyterpilot_extension.py ~/.ipython/profile_default/startup/
+```
+
+### 2. Configure your Brain
+Create `~/.jupyterpilot/config.json` to choose your provider:
+
+**Local Mode (Free):**
+```json
+{
+    "mode": "local",
+    "local": {
+        "model": "qwen2.5-coder:7b"
+    }
+}
+```
+
+**Cloud Mode (Paid APIs):**
+```json
+{
+    "mode": "cloud",
+    "cloud": {
+        "provider": "openai",
+        "model": "gpt-4o",
+        "api_key": "sk-proj-..."
+    }
+}
+```
+*(Supports `openai`, `anthropic`, `google`, etc. via LiteLLM)*
+
+*Restart your Jupyter kernel, and you are ready to use `%do` and `%fix`!*
+
+---
+
 ## 🔒 Security & Privacy
 - **SSH Isolation**: Each user is "teleported" to a dedicated or team-specific remote instance.
-- **No Admin Peeking**: Admins are blocked from accessing user servers by default.
-- **Decoupled Configuration**: Sensitive IPs and keys are kept in centralized, non-hardcoded JSON files.
+- **No Peeking**: Admin access to user servers is disabled by default.
+- **Decoupled Configuration**: Sensitive IPs and keys are kept in centralized JSON files.
 
 ---
 
