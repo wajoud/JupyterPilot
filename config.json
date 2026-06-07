@@ -2,12 +2,13 @@
     "mode": "local",
     "local": {
         "url": "http://localhost:11434/api/generate",
-        "model": "qwen2.5-coder:7b"
+        "model": "qwen2.5-coder:7b",
+        "_comment": "Use Ollama for local offline inference."
     },
     "cloud": {
         "provider": "openai",
         "model": "gpt-4o",
-        "api_key": "your_key_here"
-    },
-    "context_cells": 3
+        "api_key": "sk-proj-...",
+        "_comment": "Supports openai, anthropic, google, etc. via LiteLLM."
+    }
 }
