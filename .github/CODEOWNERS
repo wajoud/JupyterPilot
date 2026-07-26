@@ -1,0 +1,42 @@
+# CODEOWNERS
+# GitHub automatically requests reviews from these owners
+# when a pull request modifies the listed paths.
+# Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# ──────────────────────────────────────────────────────────────
+# Global owner — reviews ALL pull requests by default
+# ──────────────────────────────────────────────────────────────
+*                           @wajoud
+
+# ──────────────────────────────────────────────────────────────
+# Core Infrastructure — spawner & session state
+# ──────────────────────────────────────────────────────────────
+spawner.py                  @wajoud
+jupyterpilot/               @wajoud
+jupyterpilot/session_store.py @wajoud
+jupyterpilot/admin.py       @wajoud
+jupyterpilot/seed_sqlite.py @wajoud
+
+# ──────────────────────────────────────────────────────────────
+# JupyterHub Configuration — sensitive, requires careful review
+# ──────────────────────────────────────────────────────────────
+jupyterhub_config.py        @wajoud
+hub_settings.json           @wajoud
+user_mapping.json           @wajoud
+
+# ──────────────────────────────────────────────────────────────
+# AI Extension Core
+# ──────────────────────────────────────────────────────────────
+src/jupyterpilot/           @wajoud
+jupyterpilot_extension.py   @wajoud
+
+# ──────────────────────────────────────────────────────────────
+# Tests — all test changes require owner review
+# ──────────────────────────────────────────────────────────────
+tests/                      @wajoud
+
+# ──────────────────────────────────────────────────────────────
+# Package & Build Config
+# ──────────────────────────────────────────────────────────────
+pyproject.toml              @wajoud
+.github/                    @wajoud
