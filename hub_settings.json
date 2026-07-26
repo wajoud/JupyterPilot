@@ -6,10 +6,13 @@
     "hub_bind_url": "http://[HUB_IP]:8081",
     "hub_port": 8000,
 
-    "_comment_auth": "Set your team domain and admin usernames here.",
+    "_comment_auth": "Set your team domain and admin usernames here. Admins get full cross-user session access.",
     "hosted_domain": "your-team-domain.com",
     "admin_users": ["admin_username"],
 
-    "_comment_mapping": "Path to the JSON file that maps users/groups to remote servers.",
-    "mapping_file": "user_mapping.json"
+    "_comment_mapping": "Path to the JSON fallback mapping file (used if SQLite DB is unavailable).",
+    "mapping_file": "user_mapping.json",
+
+    "_comment_db": "Path to the SQLite state DB. Stores team→VM mappings and live per-user session state.",
+    "db_path": "/var/lib/jupyterhub/jupyterpilot_state.db"
 }
