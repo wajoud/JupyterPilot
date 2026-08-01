@@ -38,6 +38,9 @@ c.JupyterHub.hub_connect_ip = hub_settings["hub_ip"]
 c.JupyterHub.port = hub_settings["hub_port"]
 c.JupyterHub.hub_bind_url = hub_settings["hub_bind_url"]
 
+# Custom templates — injects the Monitoring nav link into every page
+c.JupyterHub.template_paths = [os.path.join(os.path.dirname(__file__), "templates")]
+
 c.ConfigurableHTTPProxy.api_url = hub_settings["proxy_api_url"]
 
 # -------------------------------------------------

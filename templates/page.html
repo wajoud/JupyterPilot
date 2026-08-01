@@ -1,0 +1,54 @@
+{# templates/page.html
+   ─────────────────────────────────────────────────────
+   Extends JupyterHub's built-in page.html to inject a
+   "Monitoring" nav link alongside Home / Token / Admin.
+
+   Technique: JavaScript DOM injection after page load —
+   works across all JupyterHub 4.x and 5.x versions
+   without needing to know the exact Jinja2 block names.
+#}
+{% extends "page.html" %}
+
+{% block stylesheet %}
+{{ super() }}
+<style>
+  /* Match the JupyterHub navbar link style exactly */
+  .jp-monitoring-link {
+    color: rgba(255,255,255,.75) !important;
+    transition: color .15s ease-in-out;
+    padding: .5rem 1rem;
+    font-size: .9375rem;
+  }
+  .jp-monitoring-link:hover {
+    color: #fff !important;
+    text-decoration: none;
+  }
+</style>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // Find the navbar-nav that contains Home / Token / Admin
+    var navLinks = document.querySelectorAll('.navbar-nav .nav-link');
+    var navBar   = null;
+
+    // Walk up from any existing nav-link to find the parent <ul>
+    if (navLinks.length > 0) {
+      navBar = navLinks[0].closest('ul.navbar-nav');
+    }
+
+    if (!navBar) return;  // safety guard — nav not found
+
+    // Build the Monitoring nav item
+    var li = document.createElement('li');
+    li.className = 'nav-item';
+
+    var a = document.createElement('a');
+    a.href      = '/monitoring';
+    a.className = 'nav-link jp-monitoring-link';
+    a.title     = 'Live VM metrics dashboard';
+    a.innerHTML = '📊 Monitoring';
+
+    li.appendChild(a);
+    navBar.appendChild(li);
+  });
+</script>
+{% endblock stylesheet %}
