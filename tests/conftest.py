@@ -1,5 +1,5 @@
-import sys
 import os
+import sys
 
 # Ensure the root of the project is on sys.path so that the root-level
 # `jupyterpilot/` package and `spawner.py` are always importable in tests,
@@ -20,9 +20,10 @@ class MockSpawner:
         self.log = MagicMock()
         self.ip = ""
         self.port = 0
-    
+
     def get_env(self):
         return {"JUPYTERHUB_API_KEY": "test_api_key"}
+
 
 class MockBaseHandler:
     def __init__(self, *args, **kwargs):
@@ -41,6 +42,7 @@ class MockBaseHandler:
     def finish(self, content):
         self.finished_content = content
 
+
 # Inject mocks into sys.modules
 jupyterhub_mock = MagicMock()
 jupyterhub_mock.spawner = MagicMock()
@@ -57,5 +59,6 @@ sys.modules["paramiko"] = MagicMock()
 
 # Inject get_config() into builtins so jupyterhub_config.py can find it
 import builtins
+
 config_mock = MagicMock()
 builtins.get_config = lambda: config_mock

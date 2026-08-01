@@ -70,7 +70,9 @@ class VaultClient:
         parts = secret_base_path.split("/", 1)
         mount = parts[0]
         subpath = parts[1] if len(parts) > 1 else ""
-        self._base: str = f"/v1/{mount}/data/{subpath}" if subpath else f"/v1/{mount}/data"
+        self._base: str = (
+            f"/v1/{mount}/data/{subpath}" if subpath else f"/v1/{mount}/data"
+        )
 
     # -- Public API ------------------------------------------------------------
 
@@ -122,9 +124,7 @@ class VaultClient:
             )
             return {}
         except Exception as exc:  # noqa: BLE001
-            log.warning(
-                "VaultClient: unexpected error for '%s': %s", username, exc
-            )
+            log.warning("VaultClient: unexpected error for '%s': %s", username, exc)
             return {}
 
         if response.status_code == 404:

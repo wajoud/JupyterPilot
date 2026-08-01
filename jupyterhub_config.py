@@ -2,13 +2,14 @@
 # JupyterHub Secure Configuration
 # ===============================
 
-import os
-import sys
 import json
-import shutil
 import logging
-from oauthenticator.google import GoogleOAuthenticator
+import os
+import shutil
+import sys
+
 from jupyterhub.handlers import BaseHandler
+from oauthenticator.google import GoogleOAuthenticator
 
 # Load generalized settings
 config_path = os.path.join(os.path.dirname(__file__), "hub_settings.json")
@@ -17,17 +18,17 @@ with open(config_path, "r") as f:
 
 # Add custom spawner path dynamically
 sys.path.append(os.path.dirname(__file__))
-from spawner import CustomSpawner
 from jupyterpilot.monitoring_handler import (
     AgentWebSocketHandler,
     BrowserWebSocketHandler,
     MonitoringPageHandler,
 )
+from spawner import CustomSpawner
 
 # -------------------------------------------------
 # Base Config
 # -------------------------------------------------
-c = get_config()
+c = get_config()  # noqa: F821
 
 c.Application.log_level = "INFO"
 
@@ -45,13 +46,16 @@ c.JupyterHub.hub_bind_url = hub_settings["hub_bind_url"]
 # Copying (not extending) avoids Jinja2's infinite recursion bug.
 try:
     import jupyterhub as _jh
-    _jh_templates    = os.path.join(os.path.dirname(_jh.__file__), "templates")
-    _custom_templates = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+
+    _jh_templates = os.path.join(os.path.dirname(_jh.__file__), "templates")
+    _custom_templates = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "templates"
+    )
     _src = os.path.join(_jh_templates, "page.html")
     _dst = os.path.join(_custom_templates, "page.html")
 
     os.makedirs(_custom_templates, exist_ok=True)
-    shutil.copy2(_src, _dst)   # always sync with installed JupyterHub version
+    shutil.copy2(_src, _dst)  # always sync with installed JupyterHub version
 
     _monitoring_js = (
         "\n<!-- JupyterPilot: Monitoring nav link -->\n"
@@ -80,7 +84,9 @@ try:
     if "jp-monitoring-link" not in _page_content:
         # Inject before </body> — works regardless of which Jinja blocks are used
         if "</body>" in _page_content:
-            _page_content = _page_content.replace("</body>", _monitoring_js + "</body>", 1)
+            _page_content = _page_content.replace(
+                "</body>", _monitoring_js + "</body>", 1
+            )
         else:
             _page_content += _monitoring_js
         with open(_dst, "w") as _f:
@@ -139,6 +145,8 @@ c.JupyterHub.cookie_options = {
 # -------------------------------------------------
 # Extra Security: Hard Block /user/otheruser Access
 # -------------------------------------------------
+
+
 class BlockOtherUsersHandler(BaseHandler):
     async def prepare(self):
         user = self.current_user
@@ -157,14 +165,15 @@ class BlockOtherUsersHandler(BaseHandler):
                 self.set_status(403)
                 self.finish("🚫 Access denied: You cannot access another user's server")
 
+
 # Register all handlers: monitoring endpoints + cross-user blocker
 c.JupyterHub.extra_handlers = [
     # Task 4: Monitoring — Agent WebSocket (Worker VMs connect here)
-    (r"/monitoring/ws",      AgentWebSocketHandler),
+    (r"/monitoring/ws", AgentWebSocketHandler),
     # Task 4: Monitoring — Browser WebSocket (Dashboard live updates)
     (r"/monitoring/browser", BrowserWebSocketHandler),
     # Task 4: Monitoring — Dashboard page (all authenticated users)
-    (r"/monitoring",         MonitoringPageHandler),
+    (r"/monitoring", MonitoringPageHandler),
     # Security: block cross-user /user/<other> access
-    (r"/user/.*",            BlockOtherUsersHandler),
+    (r"/user/.*", BlockOtherUsersHandler),
 ]

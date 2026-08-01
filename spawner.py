@@ -45,6 +45,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 import paramiko
+
 try:
     import paramiko.ssh_exception as _paramiko_ssh_exc
 except (ImportError, ModuleNotFoundError):
@@ -76,7 +77,9 @@ def _load_hub_settings() -> Dict[str, Any]:
 hub_settings: Dict[str, Any] = _load_hub_settings()
 
 # Fallback JSON mapping path (used when SQLite is unavailable)
-MAPPING_FILE: str = os.path.join(BASE_DIR, hub_settings.get("mapping_file", "user_mapping.json"))
+MAPPING_FILE: str = os.path.join(
+    BASE_DIR, hub_settings.get("mapping_file", "user_mapping.json")
+)
 
 # SQLite state DB (all session state + team mappings)
 _DB_PATH: str = hub_settings.get(
@@ -90,6 +93,7 @@ try:
     _store.init_db()
 except Exception as _init_err:  # noqa: BLE001
     import logging as _logging
+
     _logging.getLogger("jupyterhub").warning(
         "CustomSpawner: could not initialise SQLite DB at %s: %s — "
         "will fall back to user_mapping.json at runtime.",
@@ -103,6 +107,7 @@ _rbac = RBACManager()
 # ──────────────────────────────────────────────────────────────────────────────
 # CustomSpawner
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class CustomSpawner(Spawner):
     """
@@ -159,7 +164,7 @@ class CustomSpawner(Spawner):
             # with the existing group-lookup pattern.
             # (We only fetch the needed team in start/stop/poll, but this
             # method is kept for unit-test compatibility.)
-            return {}   # callers that need a single team use _get_server_info
+            return {}  # callers that need a single team use _get_server_info
         else:
             return self._load_mapping_fallback()
 
@@ -180,9 +185,9 @@ class CustomSpawner(Spawner):
             if row is not None:
                 # Normalise key names to match existing code paths
                 return {
-                    "server_ip":      row["server_ip"],
+                    "server_ip": row["server_ip"],
                     "server_ssh_key": row["ssh_key"],
-                    "ssh_user":       row.get("ssh_user"),
+                    "ssh_user": row.get("ssh_user"),
                 }
             self.log.warning(
                 "CustomSpawner: group '%s' not found in SQLite; "
@@ -289,7 +294,9 @@ class CustomSpawner(Spawner):
             self.log.info(
                 "CustomSpawner: cgroups v2 limits for '%s': "
                 "MemoryMax=%s CPUQuota=%s",
-                username, self._memory_max, self._cpu_quota,
+                username,
+                self._memory_max,
+                self._cpu_quota,
             )
         else:
             self._memory_max = None
@@ -312,7 +319,8 @@ class CustomSpawner(Spawner):
                 self.environment.update(secrets)
                 self.log.info(
                     "CustomSpawner: Vault injected %d secret(s) for '%s'.",
-                    len(secrets), username,
+                    len(secrets),
+                    username,
                 )
         else:
             self.log.debug(
@@ -387,17 +395,23 @@ class CustomSpawner(Spawner):
             if "NoValidConnections" in cls:
                 self.log.error(
                     "CustomSpawner: cannot reach %s for user '%s': %s",
-                    self.ip, username, exc,
+                    self.ip,
+                    username,
+                    exc,
                 )
             elif "Authentication" in cls:
                 self.log.error(
                     "CustomSpawner: SSH authentication failed for '%s' on %s: %s",
-                    username, self.ip, exc,
+                    username,
+                    self.ip,
+                    exc,
                 )
             else:
                 self.log.error(
                     "CustomSpawner: SSH error for '%s' on %s: %s",
-                    username, self.ip, exc,
+                    username,
+                    self.ip,
+                    exc,
                 )
             raise
 
@@ -413,30 +427,28 @@ class CustomSpawner(Spawner):
                 self.log.warning(
                     "CustomSpawner: port %d on %s already in use for '%s'. "
                     "Attempting to clear stale process...",
-                    self.port, self.ip, username,
+                    self.port,
+                    self.ip,
+                    username,
                 )
-                _, fuser_out, _ = ssh.exec_command(
-                    f"fuser -k {self.port}/tcp || true"
-                )
+                _, fuser_out, _ = ssh.exec_command(f"fuser -k {self.port}/tcp || true")
                 fuser_out.channel.recv_exit_status()  # wait for completion
                 await asyncio.sleep(1)
 
             # 6. OOM enforcement startup script
             setup_oom_cmd = (
                 "mkdir -p ~/.ipython/profile_default/startup/ && "
-                "echo \"import os\n"
+                'echo "import os\n'
                 "try:\n"
                 "    with open('/proc/self/oom_score_adj', 'w') as f:\n"
                 "        f.write('500')\n"
                 "except:\n"
-                "    pass\" "
+                '    pass" '
                 "> ~/.ipython/profile_default/startup/99-admin-oom-enforcement.py"
             )
             _, oom_stdout, _ = ssh.exec_command(setup_oom_cmd)
             if oom_stdout.channel.recv_exit_status() != 0:
-                self.log.warning(
-                    "Failed to create OOM script for '%s'", username
-                )
+                self.log.warning("Failed to create OOM script for '%s'", username)
 
             # 7. Build environment and launch singleuser server
             hub_api_url: Optional[str] = hub_settings.get("hub_api_url")
@@ -464,8 +476,8 @@ class CustomSpawner(Spawner):
             )
 
             # Task 2: wrap with systemd-run if cgroup limits are configured
-            mem  = getattr(self, "_memory_max", None)
-            cpu  = getattr(self, "_cpu_quota",  None)
+            mem = getattr(self, "_memory_max", None)
+            cpu = getattr(self, "_cpu_quota", None)
             if mem or cpu:
                 unit_name = f"jupyterhub-{username}"
                 props = ""
@@ -481,7 +493,9 @@ class CustomSpawner(Spawner):
                 self.log.info(
                     "CustomSpawner: wrapping '%s' with systemd-run "
                     "(MemoryMax=%s, CPUQuota=%s)",
-                    username, mem, cpu,
+                    username,
+                    mem,
+                    cpu,
                 )
 
             cmd: str = (
@@ -493,7 +507,10 @@ class CustomSpawner(Spawner):
 
             self.log.info(
                 "CustomSpawner: spawning server for '%s' on %s:%d (role=%s)",
-                username, self.ip, self.port, role,
+                username,
+                self.ip,
+                self.port,
+                role,
             )
             ssh.exec_command(f"bash -l -c {shlex.quote(cmd)}")
 
@@ -503,25 +520,23 @@ class CustomSpawner(Spawner):
         # 8. Persist session to SQLite
         start_time: str = datetime.now(timezone.utc).isoformat()
         self._session_meta = {
-            "pid":        None,   # PID is written async by the remote shell
-            "vm_ip":      self.ip,
-            "port":       self.port,
+            "pid": None,  # PID is written async by the remote shell
+            "vm_ip": self.ip,
+            "port": self.port,
             "start_time": start_time,
-            "role":       role,
+            "role": role,
             "group_name": group,
         }
         _store.set_session(
             username,
-            vm_ip      = self.ip,
-            port       = self.port,
-            start_time = start_time,
-            role       = role,
-            status     = "running",
-            group_name = group,
+            vm_ip=self.ip,
+            port=self.port,
+            start_time=start_time,
+            role=role,
+            status="running",
+            group_name=group,
         )
-        self.log.info(
-            "CustomSpawner: session record written for '%s'", username
-        )
+        self.log.info("CustomSpawner: session record written for '%s'", username)
 
         # 9. Tell the JupyterHub proxy where to route traffic
         return (self.ip, self.port)
@@ -545,11 +560,11 @@ class CustomSpawner(Spawner):
         session = _store.get_session(username)
 
         if session:
-            vm_ip:     str = session.get("vm_ip", self.ip or "")
+            vm_ip: str = session.get("vm_ip", self.ip or "")
             group_name: str = session.get("group_name", "")
         else:
             # Fallback to in-memory metadata if SQLite row is missing
-            vm_ip      = self.ip or ""
+            vm_ip = self.ip or ""
             group_name = self._session_meta.get("group_name", "")
 
         if not vm_ip:
@@ -567,7 +582,8 @@ class CustomSpawner(Spawner):
         except Exception as exc:
             self.log.error(
                 "CustomSpawner.stop: mapping lookup failed for '%s': %s",
-                username, exc,
+                username,
+                exc,
             )
             return
 
@@ -597,9 +613,7 @@ class CustomSpawner(Spawner):
             finally:
                 ssh.close()
         except Exception as exc:  # noqa: BLE001
-            self.log.error(
-                "CustomSpawner: SSH stop failed for '%s': %s", username, exc
-            )
+            self.log.error("CustomSpawner: SSH stop failed for '%s': %s", username, exc)
 
         # Update SQLite — mark stopped, then remove the row
         _store.set_session(username, status="stopped")
@@ -627,7 +641,7 @@ class CustomSpawner(Spawner):
             # No session row → assume not running
             return 0
 
-        vm_ip:     str = session.get("vm_ip", self.ip or "")
+        vm_ip: str = session.get("vm_ip", self.ip or "")
         group_name: str = session.get("group_name", "")
 
         if not vm_ip:
@@ -636,9 +650,11 @@ class CustomSpawner(Spawner):
         pid_file: str = self._pid_file or f"/tmp/jupyterhub-{username}.pid"
 
         try:
-            server_info = self._get_server_info(group_name) if group_name else {
-                "server_ip": vm_ip, "server_ssh_key": ""
-            }
+            server_info = (
+                self._get_server_info(group_name)
+                if group_name
+                else {"server_ip": vm_ip, "server_ssh_key": ""}
+            )
             ssh = self._open_ssh(server_info)
             try:
                 _, stdout, _ = ssh.exec_command(
@@ -655,13 +671,11 @@ class CustomSpawner(Spawner):
             return 0
 
         if status == "0":
-            return None   # Running — JupyterHub Spawner API convention
+            return None  # Running — JupyterHub Spawner API convention
 
         # Process is gone — update SQLite
         _store.set_session(username, status="stopped")
-        self.log.info(
-            "CustomSpawner.poll: process stopped for '%s'", username
-        )
+        self.log.info("CustomSpawner.poll: process stopped for '%s'", username)
         return 0
 
     def clear_state(self) -> None:
@@ -674,10 +688,8 @@ class CustomSpawner(Spawner):
         """
         username: str = self.user.name
         _store.clear_session(username)
-        self._pid_file     = None
+        self._pid_file = None
         self._session_meta = {}
-        self.ip            = ""
-        self.port          = 0
-        self.log.info(
-            "CustomSpawner: state cleared for user '%s'", username
-        )
+        self.ip = ""
+        self.port = 0
+        self.log.info("CustomSpawner: state cleared for user '%s'", username)

@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 # SessionStore
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class SessionStore:
     """
     Thread-safe SQLite wrapper providing team mapping lookups and per-user
@@ -242,8 +243,6 @@ class SessionStore:
         ``stop()`` to remove stale state.
         """
         with _write_lock, self._connect() as conn:
-            conn.execute(
-                "DELETE FROM user_sessions WHERE username = ?", (username,)
-            )
+            conn.execute("DELETE FROM user_sessions WHERE username = ?", (username,))
             conn.commit()
         log.info("SessionStore: session cleared for '%s'", username)

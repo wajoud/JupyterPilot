@@ -60,6 +60,7 @@ _BROWSER_CLIENTS: Set["BrowserWebSocketHandler"] = set()
 # Agent WebSocket handler  (Worker VM → Hub)
 # ---------------------------------------------------------------------------
 
+
 class AgentWebSocketHandler(WebSocketHandler):
     """
     Accepts WebSocket connections from ``metrics_agent.py`` running on each
@@ -76,7 +77,9 @@ class AgentWebSocketHandler(WebSocketHandler):
         return True
 
     def open(self) -> None:
-        log.info("MonitoringHandler: Worker agent connected from %s", self.request.remote_ip)
+        log.info(
+            "MonitoringHandler: Worker agent connected from %s", self.request.remote_ip
+        )
 
     def on_message(self, message: str) -> None:
         try:
@@ -92,22 +95,29 @@ class AgentWebSocketHandler(WebSocketHandler):
         dead: Set[BrowserWebSocketHandler] = set()
         for client in _BROWSER_CLIENTS:
             try:
-                client.write_message(json.dumps({
-                    "type": "snapshot",
-                    "worker": hostname,
-                    "data": snapshot,
-                }))
+                client.write_message(
+                    json.dumps(
+                        {
+                            "type": "snapshot",
+                            "worker": hostname,
+                            "data": snapshot,
+                        }
+                    )
+                )
             except Exception:  # noqa: BLE001
                 dead.add(client)
         _BROWSER_CLIENTS.difference_update(dead)
 
     def on_close(self) -> None:
-        log.info("MonitoringHandler: Worker agent disconnected (%s)", self.request.remote_ip)
+        log.info(
+            "MonitoringHandler: Worker agent disconnected (%s)", self.request.remote_ip
+        )
 
 
 # ---------------------------------------------------------------------------
 # Browser WebSocket handler  (Hub → Browser)
 # ---------------------------------------------------------------------------
+
 
 class BrowserWebSocketHandler(WebSocketHandler):
     """
@@ -129,10 +139,14 @@ class BrowserWebSocketHandler(WebSocketHandler):
         # Send current snapshots immediately so the page isn't blank on load
         if _WORKER_SNAPSHOTS:
             try:
-                self.write_message(json.dumps({
-                    "type": "init",
-                    "workers": _WORKER_SNAPSHOTS,
-                }))
+                self.write_message(
+                    json.dumps(
+                        {
+                            "type": "init",
+                            "workers": _WORKER_SNAPSHOTS,
+                        }
+                    )
+                )
             except Exception:  # noqa: BLE001
                 pass
 
@@ -167,5 +181,7 @@ class MonitoringPageHandler(web.RequestHandler):
                 self.write(fh.read())
         except FileNotFoundError:
             self.set_status(500)
-            self.write("Monitoring dashboard HTML not found. "
-                       "Ensure jupyterpilot/static/monitoring.html exists.")
+            self.write(
+                "Monitoring dashboard HTML not found. "
+                "Ensure jupyterpilot/static/monitoring.html exists."
+            )

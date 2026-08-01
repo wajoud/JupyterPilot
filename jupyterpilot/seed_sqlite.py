@@ -85,8 +85,8 @@ def seed(db_path: str, mapping_path: str) -> None:
             continue
 
         server_ip = info.get("server_ip", "")
-        ssh_key   = info.get("server_ssh_key", "")
-        ssh_user  = info.get("ssh_user")          # optional field
+        ssh_key = info.get("server_ssh_key", "")
+        ssh_user = info.get("ssh_user")  # optional field
 
         if not server_ip or not ssh_key:
             print(

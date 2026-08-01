@@ -35,7 +35,6 @@ import asyncio
 import json
 import logging
 import os
-import platform
 import socket
 import time
 from typing import Any, Dict
@@ -51,6 +50,7 @@ logging.basicConfig(
 # ---------------------------------------------------------------------------
 # Metric collection
 # ---------------------------------------------------------------------------
+
 
 def _collect_metrics(prev_net: Dict[str, int], elapsed: float) -> Dict[str, Any]:
     """
@@ -72,17 +72,17 @@ def _collect_metrics(prev_net: Dict[str, int], elapsed: float) -> Dict[str, Any]
     # Memory
     mem = psutil.virtual_memory()
     mem_info = {
-        "used_mb":   round(mem.used / 1024 / 1024, 1),
-        "total_mb":  round(mem.total / 1024 / 1024, 1),
-        "percent":   mem.percent,
+        "used_mb": round(mem.used / 1024 / 1024, 1),
+        "total_mb": round(mem.total / 1024 / 1024, 1),
+        "percent": mem.percent,
     }
 
     # Disk (root filesystem)
     disk = psutil.disk_usage("/")
     disk_info = {
-        "used_gb":  round(disk.used / 1024 / 1024 / 1024, 2),
+        "used_gb": round(disk.used / 1024 / 1024 / 1024, 2),
         "total_gb": round(disk.total / 1024 / 1024 / 1024, 2),
-        "percent":  disk.percent,
+        "percent": disk.percent,
     }
 
     # Network I/O — compute rolling rates
@@ -91,18 +91,18 @@ def _collect_metrics(prev_net: Dict[str, int], elapsed: float) -> Dict[str, Any]
     curr_recv = net.bytes_recv
     dt = max(elapsed, 0.1)  # guard against division by zero
 
-    upload_bps   = (curr_sent - prev_net.get("bytes_sent", curr_sent)) / dt
+    upload_bps = (curr_sent - prev_net.get("bytes_sent", curr_sent)) / dt
     download_bps = (curr_recv - prev_net.get("bytes_recv", curr_recv)) / dt
 
     net_info = {
-        "bytes_sent":      curr_sent,
-        "bytes_recv":      curr_recv,
-        "packets_sent":    net.packets_sent,
-        "packets_recv":    net.packets_recv,
-        "upload_mbps":     round(upload_bps   / 1024 / 1024, 3),
-        "download_mbps":   round(download_bps / 1024 / 1024, 3),
-        "upload_kbps":     round(upload_bps   / 1024, 1),
-        "download_kbps":   round(download_bps / 1024, 1),
+        "bytes_sent": curr_sent,
+        "bytes_recv": curr_recv,
+        "packets_sent": net.packets_sent,
+        "packets_recv": net.packets_recv,
+        "upload_mbps": round(upload_bps / 1024 / 1024, 3),
+        "download_mbps": round(download_bps / 1024 / 1024, 3),
+        "upload_kbps": round(upload_bps / 1024, 1),
+        "download_kbps": round(download_bps / 1024, 1),
     }
 
     # Load average (1-min, 5-min, 15-min) — Linux only
@@ -112,17 +112,17 @@ def _collect_metrics(prev_net: Dict[str, int], elapsed: float) -> Dict[str, Any]
         load_avg = [0.0, 0.0, 0.0]
 
     return {
-        "hostname":   socket.gethostname(),
-        "ip":         socket.gethostbyname(socket.gethostname()),
-        "timestamp":  time.time(),
+        "hostname": socket.gethostname(),
+        "ip": socket.gethostbyname(socket.gethostname()),
+        "timestamp": time.time(),
         "cpu": {
-            "percent":    cpu_percent,
-            "per_core":   cpu_per_core,
+            "percent": cpu_percent,
+            "per_core": cpu_per_core,
             "core_count": cpu_count,
-            "load_avg":   load_avg,
+            "load_avg": load_avg,
         },
         "memory": mem_info,
-        "disk":   disk_info,
+        "disk": disk_info,
         "network": net_info,
         # Updated counters returned separately so the caller can pass them
         # back as prev_net on the next iteration.
@@ -133,6 +133,7 @@ def _collect_metrics(prev_net: Dict[str, int], elapsed: float) -> Dict[str, Any]
 # ---------------------------------------------------------------------------
 # WebSocket streaming loop
 # ---------------------------------------------------------------------------
+
 
 async def _stream(hub_ws_url: str, interval: float) -> None:
     """
@@ -182,7 +183,8 @@ async def _stream(hub_ws_url: str, interval: float) -> None:
         except Exception as exc:  # noqa: BLE001
             log.warning(
                 "Connection to Hub lost: %s. Reconnecting in %ds...",
-                exc, int(backoff),
+                exc,
+                int(backoff),
             )
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60)  # cap at 60 s
@@ -192,6 +194,7 @@ async def _stream(hub_ws_url: str, interval: float) -> None:
 # Entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="JupyterPilot metrics agent — streams psutil metrics to the Hub."
@@ -200,7 +203,7 @@ def main() -> None:
         "--hub",
         default=os.environ.get("JUPYTERPILOT_HUB_WS", ""),
         help="WebSocket URL of the Hub monitoring endpoint "
-             "(e.g. ws://172.31.30.186:8000/monitoring/ws)",
+        "(e.g. ws://172.31.30.186:8000/monitoring/ws)",
     )
     parser.add_argument(
         "--interval",
@@ -211,9 +214,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if not args.hub:
-        parser.error(
-            "Please supply --hub <WS_URL> or set JUPYTERPILOT_HUB_WS env var."
-        )
+        parser.error("Please supply --hub <WS_URL> or set JUPYTERPILOT_HUB_WS env var.")
 
     asyncio.run(_stream(args.hub, args.interval))
 

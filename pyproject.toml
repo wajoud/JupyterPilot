@@ -23,5 +23,3 @@ authors = [
 [project.optional-dependencies]
 dev = ["black", "pytest", "pytest-anyio", "anyio"]
 
-[tool.setuptools.packages.find]
-where = ["src"]
