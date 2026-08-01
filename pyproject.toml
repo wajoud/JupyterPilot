@@ -11,14 +11,17 @@ requires-python = ">=3.8"
 dependencies = [
     "requests",
     "ipython",
-    "litellm"
+    "litellm",
+    "paramiko",
+    "psutil",
+    "websockets"
 ]
 authors = [
     {name = "Wajoud", email = "wajoud@example.com"}
 ]
 
 [project.optional-dependencies]
-dev = ["black", "pytest"]
+dev = ["black", "pytest", "pytest-anyio", "anyio"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

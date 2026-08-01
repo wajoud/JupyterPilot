@@ -32,8 +32,9 @@ sudo apt update
 sudo apt install -y python3-pip sqlite3 nodejs npm
 sudo npm install -g configurable-http-proxy
 
-# 2. Install Python dependencies
-pip install jupyterhub oauthenticator paramiko --break-system-packages
+# 2. Install Python dependencies (psutil, websockets, paramiko etc. included)
+pip install jupyterhub oauthenticator --break-system-packages
+pip install -e /opt/jupyterpilot --break-system-packages
 
 # 3. Clone JupyterPilot & take ownership of the directory
 sudo git clone https://github.com/wajoud/JupyterPilot.git /opt/jupyterpilot
@@ -76,7 +77,7 @@ sudo chmod 600 /home/test-admin/.ssh/authorized_keys
 
 # 4. Install Jupyter & Create the notebook directory specifically for test-admin
 sudo -u test-admin mkdir -p /home/test-admin/notebook
-sudo -u test-admin pip3 install jupyterhub notebook --break-system-packages
+sudo -u test-admin pip3 install jupyterhub notebook psutil websockets --break-system-packages
 
 # 5. Create the port allocation script
 cat > get_port.py << 'EOF'
