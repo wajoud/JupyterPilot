@@ -461,7 +461,6 @@ class CustomSpawner(Spawner):
             exports: str = " ".join(
                 f"{k}={shlex.quote(str(v))}"
                 for k, v in env.items()
-                if k.startswith("JUPYTERHUB_")
             )
 
             log_file: str = f"/tmp/jupyterhub-{username}.log"
