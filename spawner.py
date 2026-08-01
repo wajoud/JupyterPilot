@@ -478,7 +478,7 @@ class CustomSpawner(Spawner):
             mem = getattr(self, "_memory_max", None)
             cpu = getattr(self, "_cpu_quota", None)
             if mem or cpu:
-                unit_name = f"jupyterhub-{username}"
+                unit_name = f"jupyterhub-{username}-{int(datetime.now(timezone.utc).timestamp())}"
                 props = ""
                 if mem:
                     props += f" --property=MemoryMax={mem}"
