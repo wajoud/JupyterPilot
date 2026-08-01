@@ -257,6 +257,10 @@ pytest -v tests/test_config.py             # Hub config & security (5 tests)
 | **Task 2** — cgroups v2 Isolation | ✅ Done | `systemd-run` hard `MemoryMax` + `CPUQuota` caps via `pre_spawn_hook` |
 | **Task 3** — Vault Secret Injection | ✅ Done | Raw-requests Vault KV-v2 client; zero-disk env injection at spawn |
 | **Task 4** — Live Monitoring Dashboard | ✅ Done | psutil agent → WebSocket → dark-mode real-time dashboard for all users |
+| **Task 5** — Controlled Env Strategy | ⏳ Planned | Base Python package layer with locked permissions and optional user venv isolation |
+| **Task 6** — LLM & MCP Connectivity | ⏳ Planned | Expand LiteLLM wrapper for local Ollama, cloud APIs, and MCP tool execution |
+| **Task 7** — Core Magics Refinement | ⏳ Planned | Harden `%do` and `%fix` cell context injection and traceback auto-healing |
+| **Task 8** — New Agentic Magics | ⏳ Planned | Build AST-aware code quality reviewer (`%review`) and refactoring (`%rework`) magics |
 
 ---
 
