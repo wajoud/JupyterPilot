@@ -192,15 +192,29 @@ export VAULT_TOKEN=your-root-or-policy-token
 ```
 Then in `hub_settings.json` set `"vault_enabled": true`. Secrets stored at `secret/jupyterpilot/<username>` are automatically injected as kernel environment variables at spawn time with zero disk I/O.
 
-### 6. Start the monitoring agent on Worker VMs (optional)
+### 6. Enable cgroups v2 Resource Limits (optional)
+
+If you specified `memory_max` or `cpu_quota` in `hub_settings.json`, the Spawner will automatically wrap the remote server in `systemd-run --user`. 
+**CRITICAL:** You must enable lingering for the target user on the Worker VM, otherwise Ubuntu's `systemd-logind` will kill the server exactly 7 seconds after it spawns:
 
 ```bash
-pip install psutil websockets
+# Run this on the Worker VM
+sudo loginctl enable-linger <username>
+```
+
+### 7. Start the monitoring agent on Worker VMs (optional)
+
+The background metrics agent is required to stream live hardware data to the Hub's monitoring dashboard.
+On your Worker VM:
+```bash
+sudo git clone https://github.com/wajoud/JupyterPilot.git /opt/jupyterpilot
+sudo pip3 install psutil websockets --break-system-packages
+
 python3 /opt/jupyterpilot/jupyterpilot/metrics_agent.py \
     --hub ws://<HUB_PRIVATE_IP>:8000/monitoring/ws \
     --interval 2
 ```
-Then visit `http://<HUB_PUBLIC_IP>:8000/monitoring` to see the live dashboard.
+Then visit `http://<HUB_PUBLIC_IP>:8000/monitoring` to see the live dashboard!
 
 ---
 
