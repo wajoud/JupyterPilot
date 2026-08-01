@@ -666,7 +666,8 @@ function setConnected(yes) {
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${proto}//${location.host}/monitoring/browser`;
+  const path  = location.pathname.replace(/\/$/, '');
+  const wsUrl = `${proto}//${location.host}${path}/browser`;
   const ws    = new WebSocket(wsUrl);
 
   ws.onopen = () => {
