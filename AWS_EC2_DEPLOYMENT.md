@@ -14,9 +14,9 @@ This guide walks through the exact steps to deploy JupyterPilot across two EC2 i
 1. **EC2 #1 (The Hub)**: 
    - Allow `SSH (Port 22)` from Anywhere.
    - Allow `Custom TCP (Port 8000)` from Anywhere (this is the JupyterHub web UI).
+   - Allow `Custom TCP (Port 8081)` from the **Worker's Private IP** (Allows the Worker to authenticate with the Hub API on startup).
 2. **EC2 #2 (The Worker)**: 
-   - Allow `SSH (Port 22)` from Anywhere.
-   - Allow `All Traffic` from the Private IP of the Hub instance.
+   - Allow `All Traffic` from the **Hub's Private IP** (Allows the Hub to SSH in and proxy to random high ports).
 
 ---
 
@@ -64,17 +64,22 @@ SSH into your Worker instance in a new terminal tab and run:
 sudo apt update
 sudo apt install -y python3-pip net-tools psmisc
 
-# 2. Install Jupyter components
-pip install jupyterhub notebook --break-system-packages
+# 2. True Isolation: Create the OS-level user (e.g., test-admin)
+sudo adduser --disabled-password --gecos "" test-admin
 
-# 3. Setup SSH Access from the Hub
-mkdir -p ~/.ssh
+# 3. Setup SSH Access from the Hub for this user
+sudo mkdir -p /home/test-admin/.ssh
 # REPLACE <PASTE_KEY_HERE> with the public key you copied from the Hub!
-echo "<PASTE_KEY_HERE>" >> ~/.ssh/authorized_keys
-chmod 600 ~/.ssh/authorized_keys
+echo "<PASTE_KEY_HERE>" | sudo tee /home/test-admin/.ssh/authorized_keys
+sudo chown -R test-admin:test-admin /home/test-admin/.ssh
+sudo chmod 600 /home/test-admin/.ssh/authorized_keys
 
-# 4. Create the port allocation script
-cat > ~/get_port.py << 'EOF'
+# 4. Install Jupyter & Create the notebook directory specifically for test-admin
+sudo -u test-admin mkdir -p /home/test-admin/notebook
+sudo -u test-admin pip3 install jupyterhub notebook --break-system-packages
+
+# 5. Create the port allocation script
+cat > get_port.py << 'EOF'
 import socket
 s = socket.socket()
 s.bind(('', 0))
@@ -82,6 +87,8 @@ port = s.getsockname()[1]
 s.close()
 print(port)
 EOF
+sudo mv get_port.py /home/test-admin/
+sudo chown test-admin:test-admin /home/test-admin/get_port.py
 ```
 
 **⚠️ Important:** Note the Private IP address of this Worker instance (e.g., `172.31.x.x`). You need it for the next step.
@@ -149,7 +156,10 @@ python3 -m jupyterhub -f /opt/jupyterpilot/jupyterhub_config.py \
     --DummyAuthenticator.password=test
 ```
 
-**To log in:**
+**To log in and test the Spawner:**
 1. Open your browser and go to `http://<HUB-PUBLIC-IP>:8000`
-2. Log in with any username (e.g. `alice`) and the password `test`.
-3. The spawner will automatically SSH into the worker, allocate a port, and proxy your connection to the isolated notebook!
+2. Log in with Username: `test-admin` and Password: `test`.
+3. Because `test-admin` is an admin (configured in `hub_settings.json`), click the **Admin** tab at the top.
+4. Go to **Groups**, create a new group named **`team_alpha`**, and add `test-admin` to it. (The Spawner requires you to be in your mapped team before it allows you to spawn).
+5. Click **Start Server**. 
+6. The spawner will automatically SSH into the worker as the `test-admin` Linux user, allocate a port, and proxy your connection directly into their completely isolated `~/notebook` environment!
