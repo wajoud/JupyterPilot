@@ -76,6 +76,7 @@ sudo chown -R test-admin:test-admin /home/test-admin/.ssh
 sudo chmod 600 /home/test-admin/.ssh/authorized_keys
 
 # 4. Install Jupyter & Create the notebook directory specifically for test-admin
+sudo loginctl enable-linger test-admin
 sudo -u test-admin mkdir -p /home/test-admin/notebook
 sudo -u test-admin pip3 install jupyterhub notebook psutil websockets --break-system-packages
 
