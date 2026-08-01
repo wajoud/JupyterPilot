@@ -65,7 +65,10 @@ SSH into your Worker instance in a new terminal tab and run:
 sudo apt update
 sudo apt install -y python3-pip net-tools psmisc
 
-# 2. True Isolation: Create the OS-level user (e.g., test-admin)
+# 2. Clone JupyterPilot repository for the Metrics Agent
+sudo git clone https://github.com/wajoud/JupyterPilot.git /opt/jupyterpilot
+
+# 3. True Isolation: Create the OS-level user (e.g., test-admin)
 sudo adduser --disabled-password --gecos "" test-admin
 
 # 3. Setup SSH Access from the Hub for this user
