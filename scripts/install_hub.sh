@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# install_hub.sh - Automates the Hub VM setup for JupyterPilot
+set -e
+
+echo "🚀 JupyterPilot Hub VM Setup"
+echo "────────────────────────────────────"
+
+# Ensure script is run with sudo
+if [ "$EUID" -ne 0 ]; then
+  echo "❌ Please run this script with sudo: sudo bash install_hub.sh"
+  exit 1
+fi
+
+echo "📦 1. Installing OS dependencies..."
+apt update -y
+apt install -y python3-pip sqlite3 nodejs npm vault curl jq
+npm install -g configurable-http-proxy
+
+echo "🐍 2. Installing Python dependencies..."
+pip3 install jupyterhub oauthenticator --break-system-packages
+# If running from within a cloned repo, install it. Otherwise, clone it.
+if [ -d "/opt/jupyterpilot" ]; then
+    echo "ℹ️  /opt/jupyterpilot already exists. Updating..."
+    cd /opt/jupyterpilot
+    git pull
+else
+    echo "📥 Cloning JupyterPilot..."
+    git clone https://github.com/wajoud/JupyterPilot.git /opt/jupyterpilot
+    chown -R $SUDO_USER:$SUDO_USER /opt/jupyterpilot
+fi
+pip3 install -e /opt/jupyterpilot --break-system-packages
+
+echo "🗄️ 3. Setting up Database..."
+mkdir -p /var/lib/jupyterhub
+chown $SUDO_USER:$SUDO_USER /var/lib/jupyterhub
+
+echo "🔑 4. Generating Spawner SSH Key..."
+mkdir -p /opt/jupyterpilot/keys
+if [ ! -f "/opt/jupyterpilot/keys/worker" ]; then
+    ssh-keygen -t ed25519 -f /opt/jupyterpilot/keys/worker -N "" -q
+    echo "✅ New SSH key generated."
+else
+    echo "ℹ️  SSH key already exists."
+fi
+
+# Interactive configuration
+echo "⚙️  5. Configuring JupyterPilot"
+read -p "Enter the Hub's Private IP (e.g. 172.31.x.x): " HUB_IP
+read -p "Enter your admin username (e.g. admin@example.com): " ADMIN_USER
+read -p "Enter the Worker's Private IP (e.g. 172.31.y.y): " WORKER_IP
+
+cat > /opt/jupyterpilot/user_mapping.json << EOF
+{
+  "team_alpha": {
+    "server_ip": "$WORKER_IP",
+    "server_ssh_key": "/opt/jupyterpilot/keys/worker"
+  }
+}
+EOF
+
+cat > /opt/jupyterpilot/hub_settings.json << EOF
+{
+  "hub_ip": "$HUB_IP",
+  "proxy_api_url": "http://$HUB_IP:5432",
+  "hub_api_url": "http://$HUB_IP:8081/hub/api",
+  "hub_bind_url": "http://$HUB_IP:8081",
+  "hub_port": 8000,
+  "hosted_domain": "example.com",
+  "admin_users": ["$ADMIN_USER"],
+  "mapping_file": "/opt/jupyterpilot/user_mapping.json",
+  "db_path": "/var/lib/jupyterhub/jupyterpilot_state.db",
+  "resource_limits": {
+    "memory_max": "512M",
+    "cpu_quota": "50%"
+  },
+  "vault_enabled": false,
+  "vault_secret_path": "secret/jupyterpilot"
+}
+EOF
+
+echo "🌱 6. Seeding the SQLite database..."
+python3 /opt/jupyterpilot/jupyterpilot/seed_sqlite.py --db /var/lib/jupyterhub/jupyterpilot_state.db --mapping /opt/jupyterpilot/user_mapping.json
+
+echo ""
+echo "🎉 Hub Setup Complete!"
+echo "────────────────────────────────────"
+echo "⚠️  CRITICAL NEXT STEP: Copy the key below and paste it into the Worker VM when running install_worker.sh:"
+echo ""
+cat /opt/jupyterpilot/keys/worker.pub
+echo ""
+echo "Start the Hub anytime using:"
+echo "python3 -m jupyterhub -f /opt/jupyterpilot/jupyterhub_config.py --JupyterHub.authenticator_class=dummy --DummyAuthenticator.password=test"
