@@ -25,6 +25,9 @@
 | 🔁 **SSH Teleport Spawner** | Launches `jupyterhub-singleuser` on isolated remote VMs per team |
 | 🗄️ **SQLite Session State** | Crash-safe session recovery — `stop()` and `poll()` read from DB, not memory |
 | 🔐 **2-Tier RBAC** | Admin/user roles managed entirely via JupyterHub Admin Panel |
+| 🧱 **cgroups v2 Isolation** | `systemd-run --user --scope` wraps every spawn with hard `MemoryMax` + `CPUQuota` caps |
+| 🔑 **Vault Secret Injection** | HashiCorp Vault KV-v2 secrets injected at spawn with zero disk I/O — opt-in, graceful degradation |
+| 📊 **Live Monitoring Dashboard** | psutil agent streams CPU, RAM, disk & network I/O over WebSocket to a dark-mode real-time dashboard |
 | 🤖 **`%do` Magic** | Natural language → executable Python injected into the next notebook cell |
 | 🩹 **`%fix` Magic** | Auto-heals Python tracebacks using LLM-powered code corrections |
 | 🌐 **Provider Agnostic** | Local Ollama (`qwen2.5-coder`) or cloud APIs (GPT-4, Claude, Gemini) |
@@ -72,21 +75,27 @@ graph LR
 
 ```
 JupyterPilot/
-├── spawner.py                      # Custom SSH spawner — RBAC + SQLite lifecycle
+├── spawner.py                      # Custom SSH spawner — RBAC, cgroups, Vault, SQLite lifecycle
 ├── jupyterhub_config.py            # JupyterHub daemon config (loaded at hub start)
 ├── jupyterpilot_extension.py       # Standalone IPython extension (%do / %fix)
-├── hub_settings.json               # Network, auth & DB path configuration
+├── hub_settings.json               # Network, auth, resource limits & Vault config
 ├── user_mapping.json               # VM routing fallback / seed source
 │
 ├── jupyterpilot/                   # Hub-side core package
 │   ├── admin.py                    #   RBACManager — 2-tier role enforcement
 │   ├── session_store.py            #   SQLite session + team mapping store
-│   └── seed_sqlite.py              #   CLI: bootstrap SQLite DB from JSON
+│   ├── seed_sqlite.py              #   CLI: bootstrap SQLite DB from JSON
+│   ├── vault_client.py             #   HashiCorp Vault KV-v2 client (raw requests)
+│   ├── metrics_agent.py            #   psutil metrics agent — runs on Worker VMs
+│   ├── monitoring_handler.py       #   Tornado WS + HTTP handlers for live dashboard
+│   └── static/
+│       └── monitoring.html         #   Dark-mode real-time monitoring dashboard
 │
 ├── src/jupyterpilot/               # Installable AI extension package
 │   ├── extension.py                #   %do / %fix magic command implementations
 │   └── provider.py                 #   LLM provider bridge (Ollama + LiteLLM)
 │
+├── AWS_EC2_DEPLOYMENT.md           # End-to-end AWS EC2 deployment guide
 └── tests/                          # 54-test mock-based unit suite
     ├── conftest.py                 #   Module mock bootstrap
     ├── test_spawner.py             #   SSH lifecycle tests
@@ -124,7 +133,15 @@ Edit `hub_settings.json`:
   "hosted_domain":"your-company.com",
   "admin_users":  ["admin@your-company.com"],
   "mapping_file": "user_mapping.json",
-  "db_path":      "/var/lib/jupyterhub/jupyterpilot_state.db"
+  "db_path":      "/var/lib/jupyterhub/jupyterpilot_state.db",
+
+  "resource_limits": {
+    "memory_max": "512M",
+    "cpu_quota":  "50%"
+  },
+
+  "vault_enabled":     false,
+  "vault_secret_path": "secret/jupyterpilot"
 }
 ```
 
@@ -166,6 +183,25 @@ Or configure your AI backend at `~/.jupyterpilot/config.json`:
 }
 ```
 
+### 5. Enable HashiCorp Vault secrets (optional)
+
+Set environment variables on the Hub VM before starting JupyterHub:
+```bash
+export VAULT_ADDR=http://127.0.0.1:8200
+export VAULT_TOKEN=your-root-or-policy-token
+```
+Then in `hub_settings.json` set `"vault_enabled": true`. Secrets stored at `secret/jupyterpilot/<username>` are automatically injected as kernel environment variables at spawn time with zero disk I/O.
+
+### 6. Start the monitoring agent on Worker VMs (optional)
+
+```bash
+pip install psutil websockets
+python3 /opt/jupyterpilot/jupyterpilot/metrics_agent.py \
+    --hub ws://<HUB_PRIVATE_IP>:8000/monitoring/ws \
+    --interval 2
+```
+Then visit `http://<HUB_PUBLIC_IP>:8000/monitoring` to see the live dashboard.
+
 ---
 
 ## 🔐 Security Model
@@ -204,9 +240,9 @@ pytest -v tests/test_config.py             # Hub config & security (5 tests)
 | Task | Status | Description |
 |---|---|---|
 | **Task 1** — Admin Core & Lifecycle | ✅ Done | SQLite session state, 2-tier RBAC, `start/stop/poll/clear_state` |
-| **Task 2** — cgroups v2 Isolation | 🔲 Planned | `systemd-run` wrapping via `pre_spawn_hook` stub |
-| **Task 3** — Vault Secret Injection | 🔲 Planned | HashiCorp Vault API key injection at spawn time |
-| **Task 4** — Telemetry & Resource Locks | 🔲 Planned | `post_stop_hook` flush to observability backend |
+| **Task 2** — cgroups v2 Isolation | ✅ Done | `systemd-run` hard `MemoryMax` + `CPUQuota` caps via `pre_spawn_hook` |
+| **Task 3** — Vault Secret Injection | ✅ Done | Raw-requests Vault KV-v2 client; zero-disk env injection at spawn |
+| **Task 4** — Live Monitoring Dashboard | ✅ Done | psutil agent → WebSocket → dark-mode real-time dashboard for all users |
 
 ---
 

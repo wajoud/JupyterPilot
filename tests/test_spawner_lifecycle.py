@@ -511,7 +511,7 @@ class TestSpawnerClearState:
         mock_spawner._pid_file     = "/tmp/jupyterhub-test_user.pid"
         mock_spawner._session_meta = {"role": "user"}
 
-        await mock_spawner.clear_state()
+        mock_spawner.clear_state()   # sync — no await
 
         assert store.get_session("test_user") is None
 
@@ -522,7 +522,7 @@ class TestSpawnerClearState:
         mock_spawner._pid_file     = "/tmp/jupyterhub-test_user.pid"
         mock_spawner._session_meta = {"role": "admin"}
 
-        await mock_spawner.clear_state()
+        mock_spawner.clear_state()   # sync — no await
 
         assert mock_spawner.ip            == ""
         assert mock_spawner.port          == 0

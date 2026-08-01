@@ -1,5 +1,13 @@
 import sys
+import os
+
+# Ensure the root of the project is on sys.path so that the root-level
+# `jupyterpilot/` package and `spawner.py` are always importable in tests,
+# even without a `pip install -e .` step.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from unittest.mock import MagicMock
+
 
 # 1. Setup Mock for jupyterhub and oauthenticator before imports happen
 class MockSpawner:
