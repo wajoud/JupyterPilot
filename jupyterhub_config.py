@@ -17,6 +17,11 @@ with open(config_path, "r") as f:
 # Add custom spawner path dynamically
 sys.path.append(os.path.dirname(__file__))
 from spawner import CustomSpawner
+from jupyterpilot.monitoring_handler import (
+    AgentWebSocketHandler,
+    BrowserWebSocketHandler,
+    MonitoringPageHandler,
+)
 
 # -------------------------------------------------
 # Base Config
@@ -95,7 +100,14 @@ class BlockOtherUsersHandler(BaseHandler):
                 self.set_status(403)
                 self.finish("🚫 Access denied: You cannot access another user's server")
 
-# Register blocker
+# Register all handlers: monitoring endpoints + cross-user blocker
 c.JupyterHub.extra_handlers = [
-    (r"/user/.*", BlockOtherUsersHandler),
+    # Task 4: Monitoring — Agent WebSocket (Worker VMs connect here)
+    (r"/monitoring/ws",      AgentWebSocketHandler),
+    # Task 4: Monitoring — Browser WebSocket (Dashboard live updates)
+    (r"/monitoring/browser", BrowserWebSocketHandler),
+    # Task 4: Monitoring — Dashboard page (all authenticated users)
+    (r"/monitoring",         MonitoringPageHandler),
+    # Security: block cross-user /user/<other> access
+    (r"/user/.*",            BlockOtherUsersHandler),
 ]

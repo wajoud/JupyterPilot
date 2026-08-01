@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>JupyterPilot — Live Monitoring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:         #0d1117;
+    --surface:    #161b22;
+    --surface2:   #21262d;
+    --border:     #30363d;
+    --text:       #e6edf3;
+    --text-muted: #8b949e;
+    --accent:     #388bfd;
+    --green:      #3fb950;
+    --yellow:     #d29922;
+    --red:        #f85149;
+    --purple:     #a371f7;
+    --cyan:       #39d353;
+    --font:       'Inter', sans-serif;
+    --mono:       'JetBrains Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* ── Header ──────────────────────────────────────────────────── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.3s;
+  }
+
+  .status-dot.connected { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.disconnected { background: var(--red); }
+
+  /* ── Main layout ─────────────────────────────────────────────── */
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  .page-title {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 4px;
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 32px;
+  }
+
+  /* ── No workers placeholder ──────────────────────────────────── */
+  #no-workers {
+    text-align: center;
+    padding: 80px 24px;
+    color: var(--text-muted);
+  }
+
+  #no-workers .icon { font-size: 48px; margin-bottom: 16px; }
+  #no-workers h2 { font-size: 20px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  #no-workers code {
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 12px 20px;
+    border-radius: 8px;
+    display: inline-block;
+    margin-top: 16px;
+    color: var(--cyan);
+    text-align: left;
+    line-height: 1.6;
+  }
+
+  /* ── Worker grid ─────────────────────────────────────────────── */
+  #workers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(640px, 1fr));
+    gap: 24px;
+  }
+
+  /* ── Worker card ─────────────────────────────────────────────── */
+  .worker-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .worker-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent)22;
+  }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface2);
+  }
+
+  .worker-name {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--accent);
+  }
+
+  .worker-ip {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .worker-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--green)22;
+    color: var(--green);
+    border: 1px solid var(--green)44;
+  }
+
+  .worker-badge.warn { background: var(--yellow)22; color: var(--yellow); border-color: var(--yellow)44; }
+  .worker-badge.crit { background: var(--red)22;    color: var(--red);    border-color: var(--red)44; }
+
+  .card-body { padding: 20px; }
+
+  /* ── Stat row ─────────────────────────────────────────────────── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .stat-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: var(--mono);
+    line-height: 1;
+  }
+
+  .stat-unit {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 3px;
+  }
+
+  .color-cpu  { color: var(--accent); }
+  .color-mem  { color: var(--purple); }
+  .color-disk { color: var(--yellow); }
+  .color-net  { color: var(--cyan); }
+
+  /* ── Progress bars ───────────────────────────────────────────── */
+  .metric-row {
+    margin-bottom: 14px;
+  }
+
+  .metric-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .metric-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  .metric-val {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text);
+  }
+
+  .bar-track {
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .bar-cpu  { background: linear-gradient(90deg, var(--accent), #6ab0ff); }
+  .bar-mem  { background: linear-gradient(90deg, var(--purple), #c49bff); }
+  .bar-disk { background: linear-gradient(90deg, var(--yellow), #f0bb4a); }
+
+  /* ── Network section ─────────────────────────────────────────── */
+  .net-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .net-box {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .net-icon { font-size: 18px; }
+
+  .net-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .net-value {
+    font-size: 16px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--cyan);
+  }
+
+  .net-total {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+  }
+
+  /* ── Sparkline chart ─────────────────────────────────────────── */
+  .chart-row {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    height: 80px;
+    position: relative;
+  }
+
+  .chart-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  /* ── Load average strip ──────────────────────────────────────── */
+  .load-strip {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .load-chip {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text-muted);
+  }
+
+  .load-chip span { color: var(--text); font-weight: 600; }
+
+  /* ── Last-seen timestamp ──────────────────────────────────────── */
+  .last-seen {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--mono);
+    margin-top: 12px;
+  }
+
+  /* ── Responsive ──────────────────────────────────────────────── */
+  @media (max-width: 700px) {
+    #workers-grid { grid-template-columns: 1fr; }
+    .stats-grid   { grid-template-columns: repeat(2, 1fr); }
+    .net-row      { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🛰️</div>
+    JupyterPilot Monitoring
+  </div>
+  <div class="status-bar">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Connecting…</span>
+  </div>
+</header>
+
+<main>
+  <div class="page-title">Live Infrastructure Monitoring</div>
+  <div class="page-subtitle" id="subtitle">Connecting to Hub…</div>
+
+  <div id="no-workers" style="display:none;">
+    <div class="icon">🖥️</div>
+    <h2>No Worker Agents Connected</h2>
+    <p>Start the metrics agent on each Worker VM to see live metrics here.</p>
+    <code>pip install psutil websockets<br>python3 /opt/jupyterpilot/jupyterpilot/metrics_agent.py \<br>&nbsp;&nbsp;--hub ws://&lt;HUB_IP&gt;:8000/monitoring/ws</code>
+  </div>
+
+  <div id="workers-grid"></div>
+</main>
+
+<script>
+// ─────────────────────────────────────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────────────────────────────────────
+const workers = {};      // { hostname: { snapshot, charts } }
+const HISTORY = 30;      // number of sparkline data points
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function colorForPct(pct) {
+  if (pct >= 90) return getComputedStyle(document.documentElement).getPropertyValue('--red').trim();
+  if (pct >= 70) return getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim();
+  return getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Build worker card
+// ─────────────────────────────────────────────────────────────────────────────
+function createCard(hostname) {
+  const card = document.createElement('div');
+  card.className = 'worker-card';
+  card.id = `card-${CSS.escape(hostname)}`;
+  card.innerHTML = `
+    <div class="card-header">
+      <div>
+        <div class="worker-name" id="wname-${hostname}">${hostname}</div>
+        <div class="worker-ip"  id="wip-${hostname}">—</div>
+      </div>
+      <div class="worker-badge" id="badge-${hostname}">LIVE</div>
+    </div>
+    <div class="card-body">
+      <!-- Stats row -->
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-label">CPU</div>
+          <div class="stat-value color-cpu" id="scpu-${hostname}">—</div>
+          <div class="stat-unit">percent</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Memory</div>
+          <div class="stat-value color-mem" id="smem-${hostname}">—</div>
+          <div class="stat-unit">percent</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Disk</div>
+          <div class="stat-value color-disk" id="sdisk-${hostname}">—</div>
+          <div class="stat-unit">percent</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">↑ Speed</div>
+          <div class="stat-value color-net" id="supkbps-${hostname}">—</div>
+          <div class="stat-unit">KB/s up</div>
+        </div>
+      </div>
+
+      <!-- CPU bar -->
+      <div class="metric-row">
+        <div class="metric-header">
+          <span class="metric-name">CPU Usage</span>
+          <span class="metric-val" id="vcpu-${hostname}">—</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill bar-cpu" id="bcpu-${hostname}" style="width:0%"></div></div>
+      </div>
+
+      <!-- Memory bar -->
+      <div class="metric-row">
+        <div class="metric-header">
+          <span class="metric-name">Memory</span>
+          <span class="metric-val" id="vmem-${hostname}">—</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill bar-mem" id="bmem-${hostname}" style="width:0%"></div></div>
+      </div>
+
+      <!-- Disk bar -->
+      <div class="metric-row">
+        <div class="metric-header">
+          <span class="metric-name">Disk (root)</span>
+          <span class="metric-val" id="vdisk-${hostname}">—</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill bar-disk" id="bdisk-${hostname}" style="width:0%"></div></div>
+      </div>
+
+      <!-- Load average -->
+      <div class="load-strip" id="load-${hostname}"></div>
+
+      <!-- Network row -->
+      <div class="net-row">
+        <div class="net-box">
+          <div class="net-icon">⬆️</div>
+          <div>
+            <div class="net-label">Upload</div>
+            <div class="net-value" id="nup-${hostname}">—</div>
+            <div class="net-total" id="nuptot-${hostname}">—</div>
+          </div>
+        </div>
+        <div class="net-box">
+          <div class="net-icon">⬇️</div>
+          <div>
+            <div class="net-label">Download</div>
+            <div class="net-value" id="ndown-${hostname}">—</div>
+            <div class="net-total" id="ndowntot-${hostname}">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CPU Sparkline -->
+      <div class="chart-row">
+        <div class="chart-label">CPU History (last ${HISTORY} samples)</div>
+        <canvas id="chart-${hostname}" height="60"></canvas>
+      </div>
+
+      <div class="last-seen" id="ls-${hostname}">Last update: —</div>
+    </div>
+  `;
+  document.getElementById('workers-grid').appendChild(card);
+
+  // Build sparkline chart
+  const ctx = document.getElementById(`chart-${hostname}`);
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: Array(HISTORY).fill(''),
+      datasets: [
+        {
+          label: 'CPU %',
+          data: Array(HISTORY).fill(null),
+          borderColor: '#388bfd',
+          backgroundColor: '#388bfd18',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true,
+          pointRadius: 0,
+        },
+        {
+          label: 'Mem %',
+          data: Array(HISTORY).fill(null),
+          borderColor: '#a371f7',
+          backgroundColor: '#a371f718',
+          borderWidth: 1.5,
+          tension: 0.4,
+          fill: false,
+          pointRadius: 0,
+        },
+      ],
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { display: false },
+        y: {
+          min: 0,
+          max: 100,
+          display: false,
+          grid: { color: '#30363d', drawBorder: false },
+        },
+      },
+    },
+  });
+
+  workers[hostname] = { chart, cpuHistory: [], memHistory: [] };
+  return card;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Update card with new snapshot
+// ─────────────────────────────────────────────────────────────────────────────
+function fmtBytes(mb) {
+  if (mb >= 1024) return (mb / 1024).toFixed(1) + ' GB';
+  return mb.toFixed(0) + ' MB';
+}
+
+function fmtNetRate(kbps) {
+  if (kbps >= 1024) return (kbps / 1024).toFixed(2) + ' MB/s';
+  return kbps.toFixed(1) + ' KB/s';
+}
+
+function fmtTotal(bytes) {
+  const gb = bytes / 1024 / 1024 / 1024;
+  if (gb >= 1) return (gb).toFixed(2) + ' GB total';
+  const mb = bytes / 1024 / 1024;
+  return mb.toFixed(1) + ' MB total';
+}
+
+function updateCard(hostname, snap) {
+  if (!workers[hostname]) createCard(hostname);
+  const w = workers[hostname];
+
+  const cpu   = snap.cpu;
+  const mem   = snap.memory;
+  const disk  = snap.disk;
+  const net   = snap.network;
+  const badge = cpu.percent >= 90 ? 'crit' : cpu.percent >= 70 ? 'warn' : '';
+
+  // Header
+  document.getElementById(`wip-${hostname}`).textContent  = snap.ip || '—';
+  const badgeEl = document.getElementById(`badge-${hostname}`);
+  badgeEl.className = `worker-badge ${badge}`;
+  badgeEl.textContent = 'LIVE';
+
+  // Stat boxes
+  document.getElementById(`scpu-${hostname}`).textContent   = cpu.percent.toFixed(1) + '%';
+  document.getElementById(`smem-${hostname}`).textContent   = mem.percent.toFixed(1) + '%';
+  document.getElementById(`sdisk-${hostname}`).textContent  = disk.percent.toFixed(1) + '%';
+  document.getElementById(`supkbps-${hostname}`).textContent = fmtNetRate(net.upload_kbps);
+
+  // Bars
+  document.getElementById(`bcpu-${hostname}`).style.width  = cpu.percent + '%';
+  document.getElementById(`bmem-${hostname}`).style.width  = mem.percent + '%';
+  document.getElementById(`bdisk-${hostname}`).style.width = disk.percent + '%';
+
+  document.getElementById(`vcpu-${hostname}`).textContent  = cpu.percent.toFixed(1) + '%';
+  document.getElementById(`vmem-${hostname}`).textContent  =
+    `${fmtBytes(mem.used_mb)} / ${fmtBytes(mem.total_mb)}`;
+  document.getElementById(`vdisk-${hostname}`).textContent =
+    `${disk.used_gb} GB / ${disk.total_gb} GB`;
+
+  // Load average
+  const loadEl = document.getElementById(`load-${hostname}`);
+  if (cpu.load_avg && cpu.load_avg.length) {
+    loadEl.innerHTML = ['1m', '5m', '15m'].map((t, i) =>
+      `<div class="load-chip">${t}: <span>${cpu.load_avg[i]}</span></div>`
+    ).join('');
+  }
+
+  // Network
+  document.getElementById(`nup-${hostname}`).textContent      = fmtNetRate(net.upload_kbps);
+  document.getElementById(`ndown-${hostname}`).textContent    = fmtNetRate(net.download_kbps);
+  document.getElementById(`nuptot-${hostname}`).textContent   = fmtTotal(net.bytes_sent);
+  document.getElementById(`ndowntot-${hostname}`).textContent = fmtTotal(net.bytes_recv);
+
+  // Sparkline
+  w.cpuHistory.push(cpu.percent);
+  w.memHistory.push(mem.percent);
+  if (w.cpuHistory.length > HISTORY) w.cpuHistory.shift();
+  if (w.memHistory.length > HISTORY) w.memHistory.shift();
+  w.chart.data.datasets[0].data = [...w.cpuHistory];
+  w.chart.data.datasets[1].data = [...w.memHistory];
+  w.chart.update('none');
+
+  // Timestamp
+  const d = new Date(snap.timestamp * 1000);
+  document.getElementById(`ls-${hostname}`).textContent =
+    'Last update: ' + d.toLocaleTimeString();
+
+  // Hide placeholder
+  document.getElementById('no-workers').style.display = 'none';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WebSocket connection
+// ─────────────────────────────────────────────────────────────────────────────
+const dot  = document.getElementById('status-dot');
+const stxt = document.getElementById('status-text');
+const sub  = document.getElementById('subtitle');
+
+function setConnected(yes) {
+  dot.className  = 'status-dot ' + (yes ? 'connected' : 'disconnected');
+  stxt.textContent = yes ? 'Connected — live data' : 'Reconnecting…';
+}
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${proto}//${location.host}/monitoring/browser`;
+  const ws    = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    setConnected(true);
+    sub.textContent = 'Real-time metrics from all connected Worker VMs — updates every 2 seconds';
+  };
+
+  ws.onmessage = (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+
+    if (msg.type === 'init') {
+      // Bulk init — all current snapshots
+      for (const [hostname, snap] of Object.entries(msg.workers)) {
+        updateCard(hostname, snap);
+      }
+      if (Object.keys(msg.workers).length === 0) {
+        document.getElementById('no-workers').style.display = '';
+      }
+    } else if (msg.type === 'snapshot') {
+      updateCard(msg.worker, msg.data);
+    }
+  };
+
+  ws.onclose = () => {
+    setConnected(false);
+    setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+connect();
+</script>
+</body>
+</html>

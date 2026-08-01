@@ -54,6 +54,7 @@ from jupyterhub.spawner import Spawner
 
 from jupyterpilot.admin import RBACManager
 from jupyterpilot.session_store import SessionStore
+from jupyterpilot.vault_client import VaultClient
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Module-level config bootstrap
@@ -253,18 +254,72 @@ class CustomSpawner(Spawner):
         )
         return ssh
 
-    # ── Lifecycle hook stubs ──────────────────────────────────────────────────
+    # ── Lifecycle hooks ───────────────────────────────────────────────────────
 
     async def pre_spawn_hook(self, spawner: Optional[Spawner] = None) -> None:
         """
-        Pre-spawn lifecycle hook — no-op stub for future tasks.
+        Pre-spawn lifecycle hook.
 
-        Task 2 integration point: cgroups v2 wrapping via ``systemd-run``.
-        Task 3 integration point: Vault secret injection into the environment.
+        Performs two actions in order:
+
+        **Task 2 — cgroups v2 resource limits:**
+            Reads ``resource_limits`` from ``hub_settings.json`` and caches
+            the ``memory_max`` and ``cpu_quota`` values on ``self`` so that
+            the ``start()`` method can wrap the launch command with
+            ``systemd-run --user --scope --property=MemoryMax=... --property=CPUQuota=...``.
+            If ``resource_limits`` is absent or ``null`` in the config, the
+            singleuser process is launched without cgroup wrapping.
+
+        **Task 3 — Vault secret injection:**
+            If ``vault_enabled`` is ``true`` in ``hub_settings.json`` and
+            ``VAULT_ADDR`` / ``VAULT_TOKEN`` are set in the Hub's environment,
+            reads the user's secrets from HashiCorp Vault at
+            ``secret/jupyterpilot/<username>`` and merges them into
+            ``self.environment``.  JupyterHub automatically passes
+            ``self.environment`` to the singleuser process at launch.
+            Vault is opt-in; a missing/unreachable Vault is silently skipped.
         """
-        self.log.debug(
-            "CustomSpawner: pre_spawn_hook (stub) for user '%s'", self.user.name
-        )
+        username: str = self.user.name
+
+        # ── Task 2: cache cgroup limits for use in start() ────────────────────
+        limits: Optional[Dict[str, Any]] = hub_settings.get("resource_limits")
+        if limits:
+            self._memory_max: Optional[str] = limits.get("memory_max")
+            self._cpu_quota: Optional[str] = limits.get("cpu_quota")
+            self.log.info(
+                "CustomSpawner: cgroups v2 limits for '%s': "
+                "MemoryMax=%s CPUQuota=%s",
+                username, self._memory_max, self._cpu_quota,
+            )
+        else:
+            self._memory_max = None
+            self._cpu_quota = None
+            self.log.debug(
+                "CustomSpawner: no resource_limits configured — "
+                "launching '%s' without cgroup wrapping.",
+                username,
+            )
+
+        # ── Task 3: Vault secret injection ────────────────────────────────────
+        if hub_settings.get("vault_enabled", False):
+            secret_path: str = hub_settings.get(
+                "vault_secret_path", "secret/jupyterpilot"
+            )
+            vault = VaultClient(secret_base_path=secret_path)
+            secrets = vault.get_user_secrets(username)
+            if secrets:
+                # Merge into self.environment; get_env() picks this up at launch
+                self.environment.update(secrets)
+                self.log.info(
+                    "CustomSpawner: Vault injected %d secret(s) for '%s'.",
+                    len(secrets), username,
+                )
+        else:
+            self.log.debug(
+                "CustomSpawner: Vault disabled — skipping secret injection "
+                "for '%s'.",
+                username,
+            )
 
     async def post_stop_hook(self, spawner: Optional[Spawner] = None) -> None:
         """
@@ -398,13 +453,40 @@ class CustomSpawner(Spawner):
             )
 
             log_file: str = f"/tmp/jupyterhub-{username}.log"
-            cmd: str = (
-                f"{exports} "
+
+            # Build the base singleuser command
+            singleuser_cmd: str = (
                 f"nohup jupyterhub-singleuser "
                 f"--ip=0.0.0.0 "
                 f"--port={self.port} "
                 f"--ServerApp.base_url={self.server.base_url} "
-                f"--notebook-dir='~/notebook/' "
+                f"--notebook-dir='~/notebook/'"
+            )
+
+            # Task 2: wrap with systemd-run if cgroup limits are configured
+            mem  = getattr(self, "_memory_max", None)
+            cpu  = getattr(self, "_cpu_quota",  None)
+            if mem or cpu:
+                unit_name = f"jupyterhub-{username}"
+                props = ""
+                if mem:
+                    props += f" --property=MemoryMax={mem}"
+                if cpu:
+                    props += f" --property=CPUQuota={cpu}"
+                singleuser_cmd = (
+                    f"systemd-run --user --scope "
+                    f"--unit={unit_name}{props} "
+                    f"-- {singleuser_cmd}"
+                )
+                self.log.info(
+                    "CustomSpawner: wrapping '%s' with systemd-run "
+                    "(MemoryMax=%s, CPUQuota=%s)",
+                    username, mem, cpu,
+                )
+
+            cmd: str = (
+                f"{exports} "
+                f"{singleuser_cmd} "
                 f"&> {log_file} & "
                 f"echo $! > {self._pid_file} && disown"
             )
