@@ -255,7 +255,7 @@ class CustomSpawner(Spawner):
 
     # ── Lifecycle hook stubs ──────────────────────────────────────────────────
 
-    async def pre_spawn_hook(self) -> None:
+    async def pre_spawn_hook(self, spawner: Optional[Spawner] = None) -> None:
         """
         Pre-spawn lifecycle hook — no-op stub for future tasks.
 
@@ -266,7 +266,7 @@ class CustomSpawner(Spawner):
             "CustomSpawner: pre_spawn_hook (stub) for user '%s'", self.user.name
         )
 
-    async def post_stop_hook(self) -> None:
+    async def post_stop_hook(self, spawner: Optional[Spawner] = None) -> None:
         """
         Post-stop lifecycle hook — no-op stub for future tasks.
 
@@ -582,7 +582,7 @@ class CustomSpawner(Spawner):
         )
         return 0
 
-    async def clear_state(self) -> None:
+    def clear_state(self) -> None:
         """
         Reset all session state for this user.
 
