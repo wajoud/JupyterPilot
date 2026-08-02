@@ -18,21 +18,28 @@ apt install -y python3-pip net-tools psmisc
 echo "📥 2. Cloning JupyterPilot repository..."
 if [ -d "/opt/jupyterpilot" ]; then
     echo "ℹ️  /opt/jupyterpilot already exists. Updating..."
-    cd /opt/jupyterpilot
-    git pull
+    cd /opt/jupyterpilot && git pull && cd -
 else
     git clone https://github.com/wajoud/JupyterPilot.git /opt/jupyterpilot
 fi
 
-echo "👤 3. Creating isolated test-admin user..."
-if id "test-admin" &>/dev/null; then
-    echo "ℹ️  User test-admin already exists."
+# Ask for username — MUST match the JupyterHub login username exactly
+read -p "Enter the JupyterHub username to isolate (must match your Hub login, e.g. wajoud): " JUPYTER_USER
+
+if [ -z "$JUPYTER_USER" ]; then
+    echo "❌ Username cannot be empty. Setup aborted."
+    exit 1
+fi
+
+echo "👤 3. Creating isolated OS user: $JUPYTER_USER..."
+if id "$JUPYTER_USER" &>/dev/null; then
+    echo "ℹ️  User $JUPYTER_USER already exists."
 else
-    adduser --disabled-password --gecos "" test-admin
+    adduser --disabled-password --gecos "" "$JUPYTER_USER"
 fi
 
 echo "🔑 4. Configuring SSH access..."
-mkdir -p /home/test-admin/.ssh
+mkdir -p /home/$JUPYTER_USER/.ssh
 read -p "Paste the public SSH key from the Hub setup step: " HUB_PUB_KEY
 
 if [ -z "$HUB_PUB_KEY" ]; then
@@ -40,20 +47,20 @@ if [ -z "$HUB_PUB_KEY" ]; then
     exit 1
 fi
 
-echo "$HUB_PUB_KEY" > /home/test-admin/.ssh/authorized_keys
-chown -R test-admin:test-admin /home/test-admin/.ssh
-chmod 600 /home/test-admin/.ssh/authorized_keys
+echo "$HUB_PUB_KEY" > /home/$JUPYTER_USER/.ssh/authorized_keys
+chown -R $JUPYTER_USER:$JUPYTER_USER /home/$JUPYTER_USER/.ssh
+chmod 600 /home/$JUPYTER_USER/.ssh/authorized_keys
 
 echo "🛡️ 5. Enabling loginctl lingering (prevents cgroup auto-kill)..."
-loginctl enable-linger test-admin
+loginctl enable-linger "$JUPYTER_USER"
 
-echo "🐍 6. Installing Jupyter dependencies..."
-sudo -u test-admin mkdir -p /home/test-admin/notebook
-sudo -u test-admin pip3 install jupyterhub notebook psutil websockets --break-system-packages
+echo "🐍 6. Installing Jupyter dependencies for $JUPYTER_USER..."
+sudo -u "$JUPYTER_USER" mkdir -p /home/$JUPYTER_USER/notebook
+sudo -u "$JUPYTER_USER" pip3 install jupyterhub notebook psutil websockets --break-system-packages
 pip3 install psutil websockets --break-system-packages # Install globally for the metrics agent
 
 echo "🔌 7. Setting up Port Allocation script..."
-cat > /home/test-admin/get_port.py << 'EOF'
+cat > /home/$JUPYTER_USER/get_port.py << 'EOF'
 import socket
 s = socket.socket()
 s.bind(('', 0))
@@ -61,7 +68,7 @@ port = s.getsockname()[1]
 s.close()
 print(port)
 EOF
-chown test-admin:test-admin /home/test-admin/get_port.py
+chown $JUPYTER_USER:$JUPYTER_USER /home/$JUPYTER_USER/get_port.py
 
 echo "📊 8. Configuring the Metrics Agent systemd service..."
 read -p "Enter the Hub's Private IP (to connect the agent to): " HUB_IP
@@ -89,5 +96,6 @@ systemctl restart jupyterpilot-metrics
 echo ""
 echo "🎉 Worker Setup Complete!"
 echo "────────────────────────────────────"
-echo "The metrics agent is now running in the background. You can check its logs with:"
+echo "Isolated user '$JUPYTER_USER' is ready on this Worker VM."
+echo "The metrics agent is running in the background. Check logs with:"
 echo "sudo journalctl -u jupyterpilot-metrics -f"

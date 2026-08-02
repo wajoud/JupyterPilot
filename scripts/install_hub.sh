@@ -47,7 +47,7 @@ pip3 install -e /opt/jupyterpilot --break-system-packages
 
 echo "🗄️ 3. Setting up Database..."
 mkdir -p /var/lib/jupyterhub
-chown $SUDO_USER:$SUDO_USER /var/lib/jupyterhub
+chown -R ${SUDO_USER:-ubuntu}:${SUDO_USER:-ubuntu} /var/lib/jupyterhub
 
 echo "🔑 4. Generating Spawner SSH Key..."
 mkdir -p /opt/jupyterpilot/keys
@@ -95,6 +95,8 @@ EOF
 
 echo "🌱 6. Seeding the SQLite database..."
 python3 /opt/jupyterpilot/jupyterpilot/seed_sqlite.py --db /var/lib/jupyterhub/jupyterpilot_state.db --mapping /opt/jupyterpilot/user_mapping.json
+# Ensure the DB file is writable by the ubuntu user (Hub runs as ubuntu, not root)
+chown -R ${SUDO_USER:-ubuntu}:${SUDO_USER:-ubuntu} /var/lib/jupyterhub
 
 echo ""
 echo "🎉 Hub Setup Complete!"
