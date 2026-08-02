@@ -13,8 +13,16 @@ fi
 
 echo "📦 1. Installing OS dependencies..."
 apt update -y
-apt install -y python3-pip sqlite3 nodejs npm vault curl jq
+apt install -y python3-pip sqlite3 nodejs npm curl jq gpg
 npm install -g configurable-http-proxy
+
+echo "🔐 1b. Installing HashiCorp Vault (optional)..."
+# Add HashiCorp's official APT repository
+wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
+    | tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
+apt update -y
+apt install -y vault || echo "⚠️  Vault install failed — skipping. You can install it later with: sudo apt install vault"
 
 echo "🐍 2. Installing Python dependencies..."
 pip3 install jupyterhub oauthenticator --break-system-packages
