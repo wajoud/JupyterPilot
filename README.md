@@ -28,9 +28,12 @@
 | 🧱 **cgroups v2 Isolation** | `systemd-run --user --scope` wraps every spawn with hard `MemoryMax` + `CPUQuota` caps |
 | 🔑 **Vault Secret Injection** | HashiCorp Vault KV-v2 secrets injected at spawn with zero disk I/O — opt-in, graceful degradation |
 | 📊 **Live Monitoring Dashboard** | psutil agent streams CPU, RAM, disk & network I/O over WebSocket to a dark-mode real-time dashboard |
-| 🤖 **`%do` Magic** | Natural language → executable Python injected into the next notebook cell |
-| 🩹 **`%fix` Magic** | Auto-heals Python tracebacks using LLM-powered code corrections |
-| 🌐 **Provider Agnostic** | Local Ollama (`qwen2.5-coder`) or cloud APIs (GPT-4, Claude, Gemini) |
+| 🏗️ **Controlled Env Strategy** | User-venv isolation at `~/.jupyterpilot/venv` keeps AI deps off the system Python |
+| 🤖 **`%do` Magic** | Natural language → executable Python injected into the next cell (`--run` to execute immediately) |
+| 🩹 **`%fix` Magic** | Auto-heals tracebacks — strips Jupyter internals before sending to LLM |
+| 🔍 **`%review` Magic** | AST-aware code quality reviewer — static analysis + LLM prose review |
+| ♻️ **`%rework` Magic** | LLM-powered refactoring with `--diff` mode to preview changes before applying |
+| 🌐 **Provider Agnostic** | Local Ollama, cloud APIs (GPT-4, Claude, Gemini) or MCP tool servers |
 | 🛡️ **OOM Protection** | Writes OOM score adjustments on remote VMs at spawn time |
 | 🔄 **JSON Fallback** | Falls back to `user_mapping.json` if SQLite DB is unreachable |
 
@@ -218,6 +221,38 @@ Then visit `http://<HUB_PUBLIC_IP>:8000/monitoring` to see the live dashboard!
 
 ---
 
+## 🤖 Magic Commands Reference
+
+Load the extension in any Jupyter session:
+```python
+%load_ext jupyterpilot.extension
+```
+
+| Command | Description |
+|---|---|
+| `%do <prompt>` | Generate Python code from a natural language prompt |
+| `%do --run <prompt>` | Generate **and immediately execute** the code |
+| `%fix` | Auto-heal the last exception (strips Jupyter internal frames before sending to LLM) |
+| `%review` | AST static analysis + LLM prose review of the last cell |
+| `%review -n 3` | Review the last 3 cells |
+| `%review --all` | Review the entire notebook session |
+| `%rework <instruction>` | Refactor the last cell per your instruction |
+| `%rework --diff <instruction>` | Preview the proposed changes as a unified diff before applying |
+
+### Config (`~/.jupyterpilot/config.json`)
+
+```json
+{
+  "mode": "local",
+  "local":  { "url": "http://localhost:11434/api/generate", "model": "qwen2.5-coder:7b" },
+  "cloud":  { "provider": "openai", "model": "gpt-4o-mini", "api_key": "sk-..." },
+  "mcp":    { "server_url": "http://localhost:3000", "tools": ["generate_code"] },
+  "rate_limit": { "requests_per_minute": 20 }
+}
+```
+
+---
+
 ## 🔐 Security Model
 
 | Control | Implementation |
@@ -257,10 +292,10 @@ pytest -v tests/test_config.py             # Hub config & security (5 tests)
 | **Task 2** — cgroups v2 Isolation | ✅ Done | `systemd-run` hard `MemoryMax` + `CPUQuota` caps via `pre_spawn_hook` |
 | **Task 3** — Vault Secret Injection | ✅ Done | Raw-requests Vault KV-v2 client; zero-disk env injection at spawn |
 | **Task 4** — Live Monitoring Dashboard | ✅ Done | psutil agent → WebSocket → dark-mode real-time dashboard for all users |
-| **Task 5** — Controlled Env Strategy | ⏳ Planned | Base Python package layer with locked permissions and optional user venv isolation |
-| **Task 6** — LLM & MCP Connectivity | ⏳ Planned | Expand LiteLLM wrapper for local Ollama, cloud APIs, and MCP tool execution |
-| **Task 7** — Core Magics Refinement | ⏳ Planned | Harden `%do` and `%fix` cell context injection and traceback auto-healing |
-| **Task 8** — New Agentic Magics | ⏳ Planned | Build AST-aware code quality reviewer (`%review`) and refactoring (`%rework`) magics |
+| **Task 5** — Controlled Env Strategy | ✅ Done | User venv at `~/.jupyterpilot/venv`; `[ai]` optional package extra |
+| **Task 6** — LLM & MCP Connectivity | ✅ Done | 3 backends (Ollama, LiteLLM, MCP) with retry, rate-limiting & Vault key reads |
+| **Task 7** — Core Magics Refinement | ✅ Done | Cell output context, traceback stripping, `--run` flag, IPython store integration |
+| **Task 8** — New Agentic Magics | ✅ Done | `%review` (AST + LLM) and `%rework --diff` (unified diff preview before apply) |
 
 ---
 
