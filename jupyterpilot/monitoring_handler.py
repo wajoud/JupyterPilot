@@ -37,7 +37,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, Set
+from typing import Any, Dict, Set, Union
 
 from tornado import web
 from tornado.websocket import WebSocketHandler
@@ -76,12 +76,12 @@ class AgentWebSocketHandler(WebSocketHandler):
         # Allow connections from Worker VMs in the same VPC
         return True
 
-    def open(self) -> None:
+    def open(self, *args: str, **kwargs: str) -> None:
         log.info(
             "MonitoringHandler: Worker agent connected from %s", self.request.remote_ip
         )
 
-    def on_message(self, message: str) -> None:
+    def on_message(self, message: Union[str, bytes]) -> None:
         try:
             snapshot = json.loads(message)
         except (json.JSONDecodeError, TypeError):
@@ -133,7 +133,7 @@ class BrowserWebSocketHandler(WebSocketHandler):
     def check_origin(self, origin: str) -> bool:
         return True
 
-    def open(self) -> None:
+    def open(self, *args: str, **kwargs: str) -> None:
         _BROWSER_CLIENTS.add(self)
         log.debug("MonitoringHandler: browser client connected.")
         # Send current snapshots immediately so the page isn't blank on load
@@ -150,7 +150,7 @@ class BrowserWebSocketHandler(WebSocketHandler):
             except Exception:  # noqa: BLE001
                 pass
 
-    def on_message(self, message: str) -> None:
+    def on_message(self, message: Union[str, bytes]) -> None:
         # Browser sends no messages; ignore gracefully
         pass
 
