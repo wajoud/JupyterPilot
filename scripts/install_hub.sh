@@ -17,9 +17,16 @@ apt install -y python3-pip sqlite3 nodejs npm curl jq gpg
 npm install -g configurable-http-proxy
 
 echo "🔐 1b. Installing HashiCorp Vault (optional)..."
-# Add HashiCorp's official APT repository
+# HashiCorp only publishes packages up to Ubuntu 24.04 (noble).
+# Fall back to noble if running on a newer release (e.g. 26.04 resolute).
+UBUNTU_CODENAME=$(lsb_release -cs)
+HASHICORP_CODENAME="noble"
+case "$UBUNTU_CODENAME" in
+    focal|jammy|noble) HASHICORP_CODENAME="$UBUNTU_CODENAME" ;;
+    *) echo "ℹ️  Ubuntu '$UBUNTU_CODENAME' not yet in HashiCorp repo — using 'noble' packages." ;;
+esac
 wget -qO- https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com ${HASHICORP_CODENAME} main" \
     | tee /etc/apt/sources.list.d/hashicorp.list > /dev/null
 apt update -y
 apt install -y vault || echo "⚠️  Vault install failed — skipping. You can install it later with: sudo apt install vault"
