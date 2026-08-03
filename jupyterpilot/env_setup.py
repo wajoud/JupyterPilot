@@ -8,11 +8,11 @@ current Python environment before any magic commands are registered.
 
 Strategy (in priority order):
   1. If deps are already importable → no-op, instant return.
-  2. If a user venv exists at ~/.jupyterpilot/venv → activate it by prepending
-     its site-packages to sys.path.
-  3. Otherwise → create the venv, install jupyterpilot[ai] into it, and activate.
-
-This keeps the global system packages untouched (important on shared Hub VMs).
+  2. If a user venv exists at ~/.jupyterpilot/venv → activate it.
+  3. Try to create the venv and install jupyterpilot[ai] into it.
+  4. If venv creation fails (e.g. python3-venv not installed) → fall back to
+     installing deps directly via pip into the user's local site-packages.
+     This keeps things working on stock Ubuntu without extra apt packages.
 """
 
 from __future__ import annotations
@@ -54,21 +54,59 @@ def _activate_venv() -> bool:
     return False
 
 
-def _create_venv() -> None:
-    """Create ~/.jupyterpilot/venv and install AI deps into it."""
+def _create_venv() -> bool:
+    """
+    Create ~/.jupyterpilot/venv and install AI deps into it.
+    Returns True on success, False if venv module is unavailable.
+    """
     _VENV_DIR.mkdir(parents=True, exist_ok=True)
     python = sys.executable
 
     print(f"[JupyterPilot] Creating AI venv at {_VENV_DIR} …")
-    subprocess.run([python, "-m", "venv", str(_VENV_DIR)], check=True)
+    result = subprocess.run(
+        [python, "-m", "venv", str(_VENV_DIR)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        # python3-venv not installed — tell the user but don't crash
+        print(
+            "[JupyterPilot] ⚠️  Could not create venv "
+            f"(install python3-venv for full isolation):\n  {result.stderr.strip()}"
+        )
+        return False
 
     pip = _VENV_DIR / "bin" / "pip"
-    print("[JupyterPilot] Installing AI dependencies (this happens once) …")
+    print("[JupyterPilot] Installing AI dependencies into venv (once-only) …")
     subprocess.run(
-        [str(pip), "install", "--quiet", "jupyterpilot[ai]"],
+        [str(pip), "install", "--quiet", "jupyterpilot[ai]@git+https://github.com/wajoud/JupyterPilot.git"],
         check=True,
     )
-    print("[JupyterPilot] ✅ AI dependencies installed.")
+    print("[JupyterPilot] ✅ AI dependencies installed into venv.")
+    return True
+
+
+def _install_deps_inline() -> None:
+    """
+    Fallback: install AI deps directly into the user's site-packages via pip.
+    Used when venv creation fails (e.g. python3-venv not installed on Ubuntu).
+    """
+    print("[JupyterPilot] Falling back to inline pip install of AI deps …")
+    subprocess.run(
+        [
+            sys.executable, "-m", "pip", "install", "--quiet",
+            "jupyterpilot[ai]@git+https://github.com/wajoud/JupyterPilot.git",
+            "--break-system-packages",
+            "--user",
+        ],
+        check=True,
+    )
+    # Ensure user site-packages is on the path for this session
+    import site
+    user_site = site.getusersitepackages()
+    if user_site not in sys.path:
+        sys.path.insert(0, user_site)
+    print("[JupyterPilot] ✅ AI dependencies installed (inline).")
 
 
 def ensure_ai_deps() -> None:
@@ -76,7 +114,7 @@ def ensure_ai_deps() -> None:
     Public entry point — called at magic registration time.
 
     Guarantees that after this function returns, all AI packages are importable.
-    Raises RuntimeError only if venv creation itself fails.
+    Raises RuntimeError only as a last resort if all strategies fail.
     """
     if _deps_available():
         return  # Fast path — already available, nothing to do
@@ -85,12 +123,26 @@ def ensure_ai_deps() -> None:
     if _activate_venv() and _deps_available():
         return
 
-    # Venv doesn't exist or is broken — create it
-    try:
-        _create_venv()
+    # Try creating the venv
+    venv_ok = _create_venv()
+    if venv_ok:
         _activate_venv()
+        if _deps_available():
+            return
+
+    # Venv unavailable — fall back to inline pip install
+    try:
+        _install_deps_inline()
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
-            f"[JupyterPilot] Failed to set up AI dependencies: {exc}\n"
-            "You can install them manually with: pip install jupyterpilot[ai]"
+            "[JupyterPilot] Could not install AI dependencies automatically.\n"
+            "Run manually:  pip install 'jupyterpilot[ai]' --break-system-packages\n"
+            f"Details: {exc}"
         ) from exc
+
+    if not _deps_available():
+        raise RuntimeError(
+            "[JupyterPilot] AI packages still not importable after install.\n"
+            "Try restarting the kernel after running:\n"
+            "  pip install 'jupyterpilot[ai]' --break-system-packages"
+        )
