@@ -29,9 +29,6 @@ from IPython.core.magic_arguments import argument, magic_arguments, parse_argstr
 from .env_setup import ensure_ai_deps
 from .provider import LLMProvider
 
-# Ensure AI packages are available before anything else
-ensure_ai_deps()
-
 _MAGIC_PREFIXES = ("%do", "%fix", "%review", "%rework")
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -383,8 +380,12 @@ class JupyterPilotMagics(Magics):
 
 def load_ipython_extension(ipython) -> None:
     """Register JupyterPilot magics with the running IPython kernel."""
+    # Ensure AI packages are available before registering magics
+    ensure_ai_deps()
+    
     ipython.register_magics(JupyterPilotMagics(ipython))
     print(
         "✅ JupyterPilot loaded. Available: %do, %fix, %review, %rework\n"
         "   Run %do? for help on any command."
     )
+
