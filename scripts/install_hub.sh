@@ -32,6 +32,9 @@ apt update -y
 apt install -y vault || echo "⚠️  Vault install failed — skipping. You can install it later with: sudo apt install vault"
 
 echo "🐍 2. Installing Python dependencies..."
+# Ubuntu 26 ships typing_extensions via apt with no RECORD file — force-reinstall
+# it first so pip can safely manage it going forward.
+pip3 install typing-extensions --break-system-packages --force-reinstall -q
 pip3 install jupyterhub oauthenticator --break-system-packages
 # If running from within a cloned repo, install it. Otherwise, clone it.
 if [ -d "/opt/jupyterpilot" ]; then
