@@ -60,7 +60,7 @@ sudo -u "$JUPYTER_USER" pip3 install jupyterhub notebook psutil websockets --bre
 pip3 install psutil websockets --break-system-packages # Install globally for the metrics agent
 
 echo "🤖 6b. Installing JupyterPilot AI extension for $JUPYTER_USER..."
-sudo -u "$JUPYTER_USER" pip3 install /opt/jupyterpilot --break-system-packages
+sudo -u "$JUPYTER_USER" pip3 install git+https://github.com/wajoud/JupyterPilot.git --break-system-packages
 
 echo "🔌 7. Setting up Port Allocation script..."
 cat > /home/$JUPYTER_USER/get_port.py << 'EOF'
