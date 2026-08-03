@@ -28,6 +28,7 @@
 | 🧱 **cgroups v2 Isolation** | `systemd-run --user --scope` wraps every spawn with hard `MemoryMax` + `CPUQuota` caps |
 | 🔑 **Vault Secret Injection** | HashiCorp Vault KV-v2 secrets injected at spawn with zero disk I/O — opt-in, graceful degradation |
 | 📊 **Live Monitoring Dashboard** | psutil agent streams CPU, RAM, disk & network I/O over WebSocket to a dark-mode real-time dashboard |
+| ⚡ **JIT User Provisioning** | Automatically creates OS user accounts and isolated environments on Worker VMs when new users log in |
 | 🏗️ **Controlled Env Strategy** | User-venv isolation at `~/.jupyterpilot/venv` keeps AI deps off the system Python |
 | 🤖 **`%do` Magic** | Natural language → executable Python injected into the next cell (`--run` to execute immediately) |
 | 🩹 **`%fix` Magic** | Auto-heals tracebacks — strips Jupyter internals before sending to LLM |
@@ -153,7 +154,8 @@ Add your team → VM mappings to `user_mapping.json`:
 {
   "team_alpha": {
     "server_ip":      "10.0.1.15",
-    "server_ssh_key": "/etc/jupyterhub/keys/team_alpha.pem"
+    "server_ssh_key": "/etc/jupyterhub/keys/team_alpha.pem",
+    "admin_ssh_user": "ubuntu"
   }
 }
 ```
