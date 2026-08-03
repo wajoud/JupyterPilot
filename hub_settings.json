@@ -18,7 +18,7 @@
 
     "_comment_resources": "cgroups v2 hard limits enforced via systemd-run on the Worker VM. Set to null to disable.",
     "resource_limits": {
-        "memory_max": "512M",
+        "memory_max": "1G",
         "cpu_quota": "50%"
     },
 

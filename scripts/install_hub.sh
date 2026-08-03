@@ -92,7 +92,7 @@ cat > /opt/jupyterpilot/hub_settings.json << EOF
   "mapping_file": "/opt/jupyterpilot/user_mapping.json",
   "db_path": "/var/lib/jupyterhub/jupyterpilot_state.db",
   "resource_limits": {
-    "memory_max": "512M",
+    "memory_max": "1G",
     "cpu_quota": "50%"
   },
   "vault_enabled": false,

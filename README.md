@@ -139,7 +139,7 @@ Edit `hub_settings.json`:
   "db_path":      "/var/lib/jupyterhub/jupyterpilot_state.db",
 
   "resource_limits": {
-    "memory_max": "512M",
+    "memory_max": "1G",
     "cpu_quota":  "50%"
   },
 
