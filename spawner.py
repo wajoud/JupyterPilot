@@ -212,6 +212,67 @@ class CustomSpawner(Spawner):
         """
         return server_info.get("ssh_user") or self.user.name
 
+    def _provision_user_jit(self, server_info: Dict[str, Any]) -> None:
+        """
+        Just-In-Time provision the OS user on the remote worker VM.
+        Connects as 'admin_ssh_user' (e.g. 'ubuntu') using the Hub's SSH key,
+        creates the user, adds their SSH key, and installs dependencies.
+        """
+        admin_user = server_info.get("admin_ssh_user")
+        if not admin_user:
+            return  # Legacy mode, no admin user configured for provisioning
+            
+        target_user = self.user.name
+        
+        # Open SSH connection as admin user
+        ssh = paramiko.SSHClient()
+        ssh.load_system_host_keys()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            ssh.connect(
+                server_info["server_ip"],
+                username=admin_user,
+                key_filename=server_info["server_ssh_key"],
+                timeout=10,
+            )
+        except Exception as e:
+            self.log.warning(f"JIT Provisioner failed to connect as {admin_user}: {e}")
+            return
+            
+        # Provisioning script
+        script = f"""
+        if id "{target_user}" &>/dev/null; then
+            exit 0
+        fi
+        
+        echo "Creating user {target_user}..."
+        sudo adduser --disabled-password --gecos "" "{target_user}"
+        sudo loginctl enable-linger "{target_user}"
+        
+        sudo -u "{target_user}" mkdir -p "/home/{target_user}/notebook"
+        sudo -u "{target_user}" mkdir -p "/home/{target_user}/.ssh"
+        
+        sudo cp "/home/{admin_user}/.ssh/authorized_keys" "/home/{target_user}/.ssh/authorized_keys"
+        sudo chown -R "{target_user}:{target_user}" "/home/{target_user}/.ssh"
+        sudo chmod 600 "/home/{target_user}/.ssh/authorized_keys"
+        
+        sudo -u "{target_user}" pip3 install jupyterhub notebook jupyterpilot[ai]@git+https://github.com/wajoud/JupyterPilot.git --break-system-packages
+        
+        # Copy the get_port.py script so port allocation works
+        sudo cp /opt/jupyterpilot/get_port.py "/home/{target_user}/get_port.py"
+        sudo chown "{target_user}:{target_user}" "/home/{target_user}/get_port.py"
+        """
+        
+        stdin, stdout, stderr = ssh.exec_command(script)
+        exit_status = stdout.channel.recv_exit_status()
+        if exit_status != 0:
+            err = stderr.read().decode()
+            self.log.error(f"JIT Provisioning script failed with status {exit_status}:\\n{err}")
+        else:
+            self.log.info(f"JIT Provisioning succeeded for user {target_user}.")
+            
+        ssh.close()
+
     def _open_ssh(self, server_info: Dict[str, Any]) -> paramiko.SSHClient:
         """
         Open and return an authenticated Paramiko SSH connection to the
@@ -388,7 +449,10 @@ class CustomSpawner(Spawner):
         await self.pre_spawn_hook()
 
         try:
-            # 4. SSH connect
+            # 4. Provision User JIT
+            self._provision_user_jit(server_info)
+            
+            # 5. SSH connect as the target user
             ssh: paramiko.SSHClient = self._open_ssh(server_info)
         except Exception as exc:
             cls = type(exc).__name__

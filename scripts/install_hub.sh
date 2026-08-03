@@ -75,7 +75,8 @@ cat > /opt/jupyterpilot/user_mapping.json << EOF
 {
   "team_alpha": {
     "server_ip": "$WORKER_IP",
-    "server_ssh_key": "/opt/jupyterpilot/keys/worker"
+    "server_ssh_key": "/opt/jupyterpilot/keys/worker",
+    "admin_ssh_user": "ubuntu"
   }
 }
 EOF
