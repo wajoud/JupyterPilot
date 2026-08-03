@@ -57,6 +57,10 @@ if [ ! -f "/opt/jupyterpilot/keys/worker" ]; then
 else
     echo "ℹ️  SSH key already exists."
 fi
+# The Hub runs as the calling user (ubuntu), not root — fix key permissions
+RUNNING_USER="${SUDO_USER:-ubuntu}"
+chown "${RUNNING_USER}:${RUNNING_USER}" /opt/jupyterpilot/keys/worker /opt/jupyterpilot/keys/worker.pub
+chmod 600 /opt/jupyterpilot/keys/worker
 
 # Interactive configuration
 echo "⚙️  5. Configuring JupyterPilot"
