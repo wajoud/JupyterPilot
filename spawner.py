@@ -221,9 +221,9 @@ class CustomSpawner(Spawner):
         admin_user = server_info.get("admin_ssh_user")
         if not admin_user:
             return  # Legacy mode, no admin user configured for provisioning
-            
+
         target_user = self.user.name
-        
+
         # Open SSH connection as admin user
         ssh = paramiko.SSHClient()
         ssh.load_system_host_keys()
@@ -238,31 +238,31 @@ class CustomSpawner(Spawner):
         except Exception as e:
             self.log.warning(f"JIT Provisioner failed to connect as {admin_user}: {e}")
             return
-            
+
         # Provisioning script
         script = f"""
         if id "{target_user}" &>/dev/null; then
             exit 0
         fi
-        
+
         echo "Creating user {target_user}..."
         sudo adduser --disabled-password --gecos "" "{target_user}"
         sudo loginctl enable-linger "{target_user}"
-        
+
         sudo -u "{target_user}" mkdir -p "/home/{target_user}/notebook"
         sudo -u "{target_user}" mkdir -p "/home/{target_user}/.ssh"
-        
+
         sudo cp "/home/{admin_user}/.ssh/authorized_keys" "/home/{target_user}/.ssh/authorized_keys"
         sudo chown -R "{target_user}:{target_user}" "/home/{target_user}/.ssh"
         sudo chmod 600 "/home/{target_user}/.ssh/authorized_keys"
-        
+
         sudo -u "{target_user}" pip3 install jupyterhub notebook jupyterpilot[ai]@git+https://github.com/wajoud/JupyterPilot.git --break-system-packages
-        
+
         # Copy the get_port.py script so port allocation works
         sudo cp /opt/jupyterpilot/get_port.py "/home/{target_user}/get_port.py"
         sudo chown "{target_user}:{target_user}" "/home/{target_user}/get_port.py"
         """
-        
+
         stdin, stdout, stderr = ssh.exec_command(script)
         exit_status = stdout.channel.recv_exit_status()
         if exit_status != 0:
@@ -270,7 +270,7 @@ class CustomSpawner(Spawner):
             self.log.error(f"JIT Provisioning script failed with status {exit_status}:\\n{err}")
         else:
             self.log.info(f"JIT Provisioning succeeded for user {target_user}.")
-            
+
         ssh.close()
 
     def _open_ssh(self, server_info: Dict[str, Any]) -> paramiko.SSHClient:
@@ -451,7 +451,7 @@ class CustomSpawner(Spawner):
         try:
             # 4. Provision User JIT
             self._provision_user_jit(server_info)
-            
+
             # 5. SSH connect as the target user
             ssh: paramiko.SSHClient = self._open_ssh(server_info)
         except Exception as exc:

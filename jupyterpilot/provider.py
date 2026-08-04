@@ -23,7 +23,7 @@ import logging
 import os
 import time
 from threading import Lock
-from typing import Any, Dict, Generator, List, Optional
+from typing import Any, Dict, List
 
 import requests
 

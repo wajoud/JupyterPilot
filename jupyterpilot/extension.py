@@ -123,16 +123,10 @@ def _analyse_ast(source: str) -> str:
                 issues.append(f"  - Line {node.lineno}: `{node.name}()` missing docstring")
 
         # Deeply nested loops (3+ levels)
+        # NOTE: full parent tracking requires an AST visitor; the depth counter
+        # below is a stub kept for future implementation.
         if isinstance(node, (ast.For, ast.While)):
-            depth = 0
-            parent = node
-            while hasattr(parent, "_fields"):
-                depth += 1
-                parent = getattr(parent, "parent", None)
-                if parent is None:
-                    break
-            # Simpler complexity check: count nesting via line numbers
-            # (full parent tracking requires a visitor)
+            pass  # placeholder — complexity check requires a NodeVisitor
 
         # Global statement
         if isinstance(node, ast.Global):
@@ -261,7 +255,7 @@ class JupyterPilotMagics(Magics):
             print("ℹ️  Could not retrieve the last executed cell.")
             return
 
-        print(f"# 🔧 JupyterPilot — analysing error and generating fix …")
+        print("# 🔧 JupyterPilot — analysing error and generating fix …")
         context = _get_context(self.shell)
         prompt = (
             "The following Python code raised an exception. "
@@ -314,9 +308,7 @@ class JupyterPilotMagics(Magics):
             "Be concise. Use bullet points.\n\n"
             f"Code to review:\n```python\n{_truncate(combined_source, 2000)}\n```"
         )
-        # For %review we want prose, not just code — temporarily override the prompt
-        self.provider._backend.generate(review_prompt)
-        context = _get_context(self.shell, n=0)
+        # For %review we want prose, not just code — call backend directly
         raw_review = self.provider._backend.generate(review_prompt)
         print(raw_review)
         print("=" * 60)
@@ -342,7 +334,7 @@ class JupyterPilotMagics(Magics):
         original = valid[-1]
         context = _get_context(self.shell)
 
-        print(f"# ♻️  JupyterPilot — reworking cell …")
+        print("# ♻️  JupyterPilot — reworking cell …")
         prompt = (
             "You are a senior Python engineer. Refactor the following code "
             "according to the instruction. Return ONLY the refactored Python code.\n\n"
@@ -382,10 +374,8 @@ def load_ipython_extension(ipython) -> None:
     """Register JupyterPilot magics with the running IPython kernel."""
     # Ensure AI packages are available before registering magics
     ensure_ai_deps()
-    
     ipython.register_magics(JupyterPilotMagics(ipython))
     print(
         "✅ JupyterPilot loaded. Available: %do, %fix, %review, %rework\n"
         "   Run %do? for help on any command."
     )
-
