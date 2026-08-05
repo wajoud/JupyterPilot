@@ -103,6 +103,24 @@ except Exception as _init_err:  # noqa: BLE001
 
 _rbac = RBACManager()
 
+# PERF FIX: cache the result of ping() so start/stop/poll don't hit SQLite
+# twice per operation.  The TTL of 5 s means a recovered DB is re-detected
+# quickly without hammering it on every spawner call.
+import time as _time  # noqa: E402  (already imported above via asyncio)
+_PING_CACHE: Optional[bool] = None
+_PING_CACHE_AT: float = 0.0
+_PING_TTL: float = 5.0  # seconds
+
+
+def _db_available() -> bool:
+    """Return cached _store.ping() result; re-checks at most every _PING_TTL seconds."""
+    global _PING_CACHE, _PING_CACHE_AT
+    now = _time.monotonic()
+    if _PING_CACHE is None or (now - _PING_CACHE_AT) > _PING_TTL:
+        _PING_CACHE = _store.ping()
+        _PING_CACHE_AT = now
+    return _PING_CACHE
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CustomSpawner
@@ -159,14 +177,10 @@ class CustomSpawner(Spawner):
         Returns:
             Dict mapping team names to server info dicts.
         """
-        if _store.ping():
-            # Build a dict of all teams from SQLite for compatibility
-            # with the existing group-lookup pattern.
-            # (We only fetch the needed team in start/stop/poll, but this
-            # method is kept for unit-test compatibility.)
+        # PERF FIX: use cached ping result — no extra DB call here.
+        if _db_available():
             return {}  # callers that need a single team use _get_server_info
-        else:
-            return self._load_mapping_fallback()
+        return self._load_mapping_fallback()
 
     def _get_server_info(self, group: str) -> Dict[str, Any]:
         """
@@ -180,7 +194,9 @@ class CustomSpawner(Spawner):
         Raises:
             RuntimeError: If the group is not found in either source.
         """
-        if _store.ping():
+        # PERF FIX: reuse the cached ping result — avoids a second DB round-trip
+        # on the same request path that _load_mapping() already checked.
+        if _db_available():
             row = _store.get_mapping(group)
             if row is not None:
                 # Normalise key names to match existing code paths

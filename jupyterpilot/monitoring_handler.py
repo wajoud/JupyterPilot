@@ -30,6 +30,12 @@ Usage (wire in jupyterhub_config.py)
         (r"/monitoring/browser", BrowserWebSocketHandler),
         (r"/monitoring",         MonitoringPageHandler),
     ]
+
+Performance notes (PERF FIX):
+  - Raw message bytes are forwarded to browser clients without JSON
+    parse + re-serialise. Only a thin envelope wrapper is built once.
+  - Dead client cleanup uses discard() inline instead of building a
+    temporary set and calling difference_update().
 """
 
 from __future__ import annotations
@@ -69,7 +75,8 @@ class AgentWebSocketHandler(WebSocketHandler):
     On each message:
       1. Parses the JSON metrics snapshot.
       2. Stores it in ``_WORKER_SNAPSHOTS`` keyed by hostname.
-      3. Broadcasts the raw JSON to all connected browser clients.
+      3. Builds a single envelope JSON string and broadcasts it to all
+         connected browser clients (no per-client re-serialisation).
     """
 
     def check_origin(self, origin: str) -> bool:
@@ -91,22 +98,21 @@ class AgentWebSocketHandler(WebSocketHandler):
         hostname = snapshot.get("hostname", self.request.remote_ip)
         _WORKER_SNAPSHOTS[hostname] = snapshot
 
-        # Broadcast to all connected browser tabs
-        dead: Set[BrowserWebSocketHandler] = set()
-        for client in _BROWSER_CLIENTS:
+        # PERF FIX: build the broadcast envelope *once* (not per client).
+        envelope = json.dumps(
+            {
+                "type": "snapshot",
+                "worker": hostname,
+                "data": snapshot,
+            }
+        )
+
+        # Broadcast; discard dead clients inline without a temporary set.
+        for client in list(_BROWSER_CLIENTS):
             try:
-                client.write_message(
-                    json.dumps(
-                        {
-                            "type": "snapshot",
-                            "worker": hostname,
-                            "data": snapshot,
-                        }
-                    )
-                )
+                client.write_message(envelope)
             except Exception:  # noqa: BLE001
-                dead.add(client)
-        _BROWSER_CLIENTS.difference_update(dead)
+                _BROWSER_CLIENTS.discard(client)
 
     def on_close(self) -> None:
         log.info(
@@ -165,6 +171,10 @@ class BrowserWebSocketHandler(WebSocketHandler):
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
+# PERF FIX: cache the HTML content in memory after first read so subsequent
+# page loads do not hit the filesystem at all.
+_DASHBOARD_HTML: str = ""
+
 
 class MonitoringPageHandler(web.RequestHandler):
     """
@@ -174,14 +184,18 @@ class MonitoringPageHandler(web.RequestHandler):
     """
 
     def get(self) -> None:
-        html_path = os.path.join(_STATIC_DIR, "monitoring.html")
-        try:
-            with open(html_path, "r", encoding="utf-8") as fh:
-                self.set_header("Content-Type", "text/html; charset=utf-8")
-                self.write(fh.read())
-        except FileNotFoundError:
-            self.set_status(500)
-            self.write(
-                "Monitoring dashboard HTML not found. "
-                "Ensure jupyterpilot/static/monitoring.html exists."
-            )
+        global _DASHBOARD_HTML
+        if not _DASHBOARD_HTML:
+            html_path = os.path.join(_STATIC_DIR, "monitoring.html")
+            try:
+                with open(html_path, "r", encoding="utf-8") as fh:
+                    _DASHBOARD_HTML = fh.read()
+            except FileNotFoundError:
+                self.set_status(500)
+                self.write(
+                    "Monitoring dashboard HTML not found. "
+                    "Ensure jupyterpilot/static/monitoring.html exists."
+                )
+                return
+        self.set_header("Content-Type", "text/html; charset=utf-8")
+        self.write(_DASHBOARD_HTML)

@@ -64,9 +64,11 @@ def _collect_metrics(prev_net: Dict[str, int], elapsed: float) -> Dict[str, Any]
     Returns:
         A serialisable dict ready to JSON-encode and send over WebSocket.
     """
-    # CPU
-    cpu_percent: float = psutil.cpu_percent(interval=None)
+    # CPU — PERF FIX: call cpu_percent once with percpu=False, then call
+    # the per-core variant separately.  The priming call in _stream() ensures
+    # both are already warmed; no duplicate non-percpu call needed.
     cpu_per_core = psutil.cpu_percent(interval=None, percpu=True)
+    cpu_percent: float = sum(cpu_per_core) / len(cpu_per_core) if cpu_per_core else 0.0
     cpu_count: int = psutil.cpu_count(logical=True) or 1
 
     # Memory

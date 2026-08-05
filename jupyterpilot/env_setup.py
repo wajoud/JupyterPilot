@@ -24,6 +24,10 @@ from pathlib import Path
 _VENV_DIR = Path.home() / ".jupyterpilot" / "venv"
 _AI_DEPS = ["ipython", "litellm"]  # mcp is optional — checked separately
 
+# PERF FIX: cache the dependency-check result so repeated ensure_ai_deps()
+# calls (e.g. from %load_ext being called more than once) return instantly.
+_DEPS_OK: bool = False
+
 
 def _deps_available() -> bool:
     """Return True if all required AI packages are importable."""
@@ -114,12 +118,21 @@ def ensure_ai_deps() -> None:
 
     Guarantees that after this function returns, all AI packages are importable.
     Raises RuntimeError only as a last resort if all strategies fail.
+
+    PERF FIX: result is cached in ``_DEPS_OK`` so subsequent calls (e.g. from
+    IPython calling ``%load_ext`` again) are essentially free.
     """
+    global _DEPS_OK
+    if _DEPS_OK:
+        return  # Cached fast path — already verified this session
+
     if _deps_available():
+        _DEPS_OK = True
         return  # Fast path — already available, nothing to do
 
     # Try activating an existing venv first
     if _activate_venv() and _deps_available():
+        _DEPS_OK = True
         return
 
     # Try creating the venv
@@ -127,6 +140,7 @@ def ensure_ai_deps() -> None:
     if venv_ok:
         _activate_venv()
         if _deps_available():
+            _DEPS_OK = True
             return
 
     # Venv unavailable — fall back to inline pip install
@@ -145,3 +159,4 @@ def ensure_ai_deps() -> None:
             "Try restarting the kernel after running:\n"
             "  pip install 'jupyterpilot[ai]' --break-system-packages"
         )
+    _DEPS_OK = True

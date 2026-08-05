@@ -76,15 +76,24 @@ def _get_context(shell, n: int = 3) -> str:
             cell_text += f"\n# Output:\n# {_truncate(str(cell_out), 400)}"
         sections.append(cell_text)
 
-    # Append namespace summary (variable names + types, skip dunders and callables)
+    # PERF FIX: single-pass with early-exit counter — avoids slicing twice.
     ns = shell.user_ns
     ns_lines: List[str] = []
-    for k, v in list(ns.items())[:20]:
+    try:
+        items = reversed(ns.items())
+    except TypeError:
+        # Fallback for Python < 3.8 where dict_items is not reversible
+        items = reversed(list(ns.items()))
+        
+    for k, v in items:
+        if len(ns_lines) >= 10:
+            break
         if k.startswith("_") or callable(v):
             continue
         ns_lines.append(f"#   {k}: {type(v).__name__}")
+    ns_lines.reverse()
     if ns_lines:
-        sections.append("# Namespace:\n" + "\n".join(ns_lines[:10]))
+        sections.append("# Namespace:\n" + "\n".join(ns_lines))
 
     return "\n\n".join(sections)
 

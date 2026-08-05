@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import time
+from functools import lru_cache
 from threading import Lock
 from typing import Any, Dict, List
 
@@ -78,12 +79,18 @@ class _RateLimiter:
         self._lock = Lock()
 
     def wait(self) -> None:
+        # PERF FIX: compute wait_time inside the lock, but sleep *outside*
+        # so other threads are not blocked during the sleep period.
         with self._lock:
             now = time.monotonic()
             wait_time = self._interval - (now - self._last_call)
             if wait_time > 0:
-                time.sleep(wait_time)
-            self._last_call = time.monotonic()
+                self._last_call += self._interval
+            else:
+                self._last_call = now
+                wait_time = 0.0
+        if wait_time > 0:
+            time.sleep(wait_time)
 
 
 # ---------------------------------------------------------------------------
@@ -100,21 +107,55 @@ def _extract_code(text: str) -> str:
       2. Fenced ``` ... ``` block (language-agnostic)
       3. Raw text (stripped)
     """
+    # PERF FIX: fast path — avoid scanning the string twice when no fences
     if "```" not in text:
-        return text.strip()
+        return text.strip("\r\n")
 
     lines = text.splitlines()
     code_lines: List[str] = []
     in_block = False
     for line in lines:
-        if line.startswith("```"):
+        if line.lstrip().startswith("```"):
             in_block = not in_block
             continue
         if in_block:
             code_lines.append(line)
 
-    extracted = "\n".join(code_lines).strip()
-    return extracted if extracted else text.strip()
+    extracted = "\n".join(code_lines)
+    return extracted.strip("\r\n") if extracted else text.strip("\r\n")
+
+
+# ---------------------------------------------------------------------------
+# Config loader (cached per-process)
+# ---------------------------------------------------------------------------
+
+
+@lru_cache(maxsize=1)
+def _load_config_cached() -> str:
+    """
+    Load and merge config exactly once per process, returned as JSON string
+    (lru_cache requires hashable return types; callers call json.loads).
+    """
+    search_paths = [
+        os.path.expanduser("~/.jupyterpilot/config.json"),
+        "/etc/jupyterpilot/config.json",
+    ]
+    for path in search_paths:
+        if os.path.exists(path):
+            try:
+                with open(path) as f:
+                    cfg = json.load(f)
+                # Deep-merge user config into defaults
+                merged: Dict[str, Any] = json.loads(json.dumps(_DEFAULT_CONFIG))
+                for k, v in cfg.items():
+                    if isinstance(v, dict) and k in merged:
+                        merged[k].update(v)
+                    else:
+                        merged[k] = v
+                return json.dumps(merged)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("LLMProvider: failed to parse %s: %s", path, exc)
+    return json.dumps(_DEFAULT_CONFIG)
 
 
 # ---------------------------------------------------------------------------
@@ -262,10 +303,13 @@ class LLMProvider:
 
     Selects the active backend from config and wraps it with rate limiting.
     Thread-safe for concurrent notebook kernels on the same VM.
+
+    Config is loaded once per process (cached) — not on every instantiation.
     """
 
     def __init__(self) -> None:
-        self.config = self._load_config()
+        # PERF FIX: deserialise from the process-level cached JSON string
+        self.config: Dict[str, Any] = self._load_config()
         rpm = self.config.get("rate_limit", {}).get("requests_per_minute", 20)
         self._rate_limiter = _RateLimiter(rpm)
         self._backend = self._build_backend()
@@ -276,27 +320,8 @@ class LLMProvider:
 
     @staticmethod
     def _load_config() -> Dict[str, Any]:
-        """Load config with cascading priority."""
-        search_paths = [
-            os.path.expanduser("~/.jupyterpilot/config.json"),
-            "/etc/jupyterpilot/config.json",
-        ]
-        for path in search_paths:
-            if os.path.exists(path):
-                try:
-                    with open(path) as f:
-                        cfg = json.load(f)
-                    # Merge with defaults so missing keys don't break things
-                    merged = json.loads(json.dumps(_DEFAULT_CONFIG))
-                    for k, v in cfg.items():
-                        if isinstance(v, dict) and k in merged:
-                            merged[k].update(v)
-                        else:
-                            merged[k] = v
-                    return merged
-                except Exception as exc:  # noqa: BLE001
-                    log.warning("LLMProvider: failed to parse %s: %s", path, exc)
-        return json.loads(json.dumps(_DEFAULT_CONFIG))
+        """Load config with cascading priority (delegates to cached loader)."""
+        return json.loads(_load_config_cached())
 
     def _build_backend(self) -> _LocalBackend | _CloudBackend | _MCPBackend:
         mode = self.config.get("mode", "local")

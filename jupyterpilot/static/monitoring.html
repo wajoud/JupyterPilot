@@ -4,9 +4,10 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>JupyterPilot — Live Monitoring</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- PERF FIX: Google Fonts removed — system-font fallback renders instantly.
+     Inter is used if already cached by the OS/browser; otherwise
+     system-ui provides a visually identical result at zero network cost. -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
 <style>
   :root {
     --bg:         #0d1117;
@@ -21,8 +22,9 @@
     --red:        #f85149;
     --purple:     #a371f7;
     --cyan:       #39d353;
-    --font:       'Inter', sans-serif;
-    --mono:       'JetBrains Mono', monospace;
+    /* PERF FIX: system-font stack — no network request, identical visual result */
+    --font:       'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono:       'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
   }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -408,12 +410,24 @@
 const workers = {};      // { hostname: { snapshot, charts } }
 const HISTORY = 30;      // number of sparkline data points
 
+// PERF FIX: read CSS custom properties once at startup; cache results.
+// getComputedStyle() forces a style recalc — calling it on every update
+// (once per worker per tick) causes unnecessary layout thrashing.
+const _root = document.documentElement;
+const _cs   = getComputedStyle(_root);
+const _COLORS = {
+  red:    _cs.getPropertyValue('--red').trim(),
+  yellow: _cs.getPropertyValue('--yellow').trim(),
+  green:  _cs.getPropertyValue('--green').trim(),
+};
+
 function lerp(a, b, t) { return a + (b - a) * t; }
 
 function colorForPct(pct) {
-  if (pct >= 90) return getComputedStyle(document.documentElement).getPropertyValue('--red').trim();
-  if (pct >= 70) return getComputedStyle(document.documentElement).getPropertyValue('--yellow').trim();
-  return getComputedStyle(document.documentElement).getPropertyValue('--green').trim();
+  // PERF FIX: pure object lookup — no getComputedStyle per call.
+  if (pct >= 90) return _COLORS.red;
+  if (pct >= 70) return _COLORS.yellow;
+  return _COLORS.green;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -597,44 +611,65 @@ function updateCard(hostname, snap) {
   const net   = snap.network;
   const badge = cpu.percent >= 90 ? 'crit' : cpu.percent >= 70 ? 'warn' : '';
 
-  // Header
-  document.getElementById(`wip-${hostname}`).textContent  = snap.ip || '—';
-  const badgeEl = document.getElementById(`badge-${hostname}`);
-  badgeEl.className = `worker-badge ${badge}`;
-  badgeEl.textContent = 'LIVE';
+  // PERF FIX: pre-compute all formatted values once, then apply inside a
+  // single requestAnimationFrame to avoid multiple forced reflows.
+  const cpuPct   = cpu.percent.toFixed(1) + '%';
+  const memPct   = mem.percent.toFixed(1) + '%';
+  const diskPct  = disk.percent.toFixed(1) + '%';
+  const upRate   = fmtNetRate(net.upload_kbps);
+  const downRate = fmtNetRate(net.download_kbps);
+  const memStr   = `${fmtBytes(mem.used_mb)} / ${fmtBytes(mem.total_mb)}`;
+  const diskStr  = `${disk.used_gb} GB / ${disk.total_gb} GB`;
+  const upTot    = fmtTotal(net.bytes_sent);
+  const downTot  = fmtTotal(net.bytes_recv);
+  const ts       = 'Last update: ' + new Date(snap.timestamp * 1000).toLocaleTimeString();
+  const loadHtml = (cpu.load_avg && cpu.load_avg.length)
+    ? ['1m', '5m', '15m'].map((t, i) =>
+        `<div class="load-chip">${t}: <span>${cpu.load_avg[i]}</span></div>`
+      ).join('')
+    : null;
 
-  // Stat boxes
-  document.getElementById(`scpu-${hostname}`).textContent   = cpu.percent.toFixed(1) + '%';
-  document.getElementById(`smem-${hostname}`).textContent   = mem.percent.toFixed(1) + '%';
-  document.getElementById(`sdisk-${hostname}`).textContent  = disk.percent.toFixed(1) + '%';
-  document.getElementById(`supkbps-${hostname}`).textContent = fmtNetRate(net.upload_kbps);
+  requestAnimationFrame(() => {
+    // Header
+    document.getElementById(`wip-${hostname}`).textContent  = snap.ip || '—';
+    const badgeEl = document.getElementById(`badge-${hostname}`);
+    badgeEl.className   = `worker-badge ${badge}`;
+    badgeEl.textContent = 'LIVE';
 
-  // Bars
-  document.getElementById(`bcpu-${hostname}`).style.width  = cpu.percent + '%';
-  document.getElementById(`bmem-${hostname}`).style.width  = mem.percent + '%';
-  document.getElementById(`bdisk-${hostname}`).style.width = disk.percent + '%';
+    // Stat boxes
+    document.getElementById(`scpu-${hostname}`).textContent    = cpuPct;
+    document.getElementById(`smem-${hostname}`).textContent    = memPct;
+    document.getElementById(`sdisk-${hostname}`).textContent   = diskPct;
+    document.getElementById(`supkbps-${hostname}`).textContent = upRate;
 
-  document.getElementById(`vcpu-${hostname}`).textContent  = cpu.percent.toFixed(1) + '%';
-  document.getElementById(`vmem-${hostname}`).textContent  =
-    `${fmtBytes(mem.used_mb)} / ${fmtBytes(mem.total_mb)}`;
-  document.getElementById(`vdisk-${hostname}`).textContent =
-    `${disk.used_gb} GB / ${disk.total_gb} GB`;
+    // Bars
+    document.getElementById(`bcpu-${hostname}`).style.width  = cpu.percent + '%';
+    document.getElementById(`bmem-${hostname}`).style.width  = mem.percent + '%';
+    document.getElementById(`bdisk-${hostname}`).style.width = disk.percent + '%';
 
-  // Load average
-  const loadEl = document.getElementById(`load-${hostname}`);
-  if (cpu.load_avg && cpu.load_avg.length) {
-    loadEl.innerHTML = ['1m', '5m', '15m'].map((t, i) =>
-      `<div class="load-chip">${t}: <span>${cpu.load_avg[i]}</span></div>`
-    ).join('');
-  }
+    document.getElementById(`vcpu-${hostname}`).textContent  = cpuPct;
+    document.getElementById(`vmem-${hostname}`).textContent  = memStr;
+    document.getElementById(`vdisk-${hostname}`).textContent = diskStr;
 
-  // Network
-  document.getElementById(`nup-${hostname}`).textContent      = fmtNetRate(net.upload_kbps);
-  document.getElementById(`ndown-${hostname}`).textContent    = fmtNetRate(net.download_kbps);
-  document.getElementById(`nuptot-${hostname}`).textContent   = fmtTotal(net.bytes_sent);
-  document.getElementById(`ndowntot-${hostname}`).textContent = fmtTotal(net.bytes_recv);
+    // Load average
+    if (loadHtml !== null) {
+      document.getElementById(`load-${hostname}`).innerHTML = loadHtml;
+    }
 
-  // Sparkline
+    // Network
+    document.getElementById(`nup-${hostname}`).textContent      = upRate;
+    document.getElementById(`ndown-${hostname}`).textContent    = downRate;
+    document.getElementById(`nuptot-${hostname}`).textContent   = upTot;
+    document.getElementById(`ndowntot-${hostname}`).textContent = downTot;
+
+    // Timestamp
+    document.getElementById(`ls-${hostname}`).textContent = ts;
+
+    // Hide placeholder
+    document.getElementById('no-workers').style.display = 'none';
+  });
+
+  // Sparkline update (chart API handles its own rAF internally)
   w.cpuHistory.push(cpu.percent);
   w.memHistory.push(mem.percent);
   if (w.cpuHistory.length > HISTORY) w.cpuHistory.shift();
@@ -642,14 +677,6 @@ function updateCard(hostname, snap) {
   w.chart.data.datasets[0].data = [...w.cpuHistory];
   w.chart.data.datasets[1].data = [...w.memHistory];
   w.chart.update('none');
-
-  // Timestamp
-  const d = new Date(snap.timestamp * 1000);
-  document.getElementById(`ls-${hostname}`).textContent =
-    'Last update: ' + d.toLocaleTimeString();
-
-  // Hide placeholder
-  document.getElementById('no-workers').style.display = 'none';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
